@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Иконка рюкзака в палитре Школьного помощника</title>
+  <desc id="desc">Округлый светло-голубой школьный рюкзак с лавандовым карманом и жёлтой молнией на мягком светлом фоне.</desc>
+  <defs>
+    <linearGradient id="background" x1="96" y1="96" x2="928" y2="928" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFCFA"/><stop offset="1" stop-color="#F1EFFD"/></linearGradient>
+    <linearGradient id="bag" x1="314" y1="269" x2="710" y2="780" gradientUnits="userSpaceOnUse"><stop stop-color="#CFE4F7"/><stop offset="1" stop-color="#85A9D8"/></linearGradient>
+    <linearGradient id="pocket" x1="361" y1="558" x2="664" y2="766" gradientUnits="userSpaceOnUse"><stop stop-color="#FAF7FF"/><stop offset="1" stop-color="#DDD8F4"/></linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="24" stdDeviation="22" flood-color="#071C42" flood-opacity=".14"/></filter>
+  </defs>
+  <rect width="1024" height="1024" rx="230" fill="url(#background)"/>
+  <circle cx="783" cy="244" r="170" fill="#EA708B" opacity=".10"/><circle cx="237" cy="780" r="162" fill="#78C8CB" opacity=".15"/>
+  <g filter="url(#shadow)" stroke="#08244A" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M442 305v-28c0-40 31-72 70-72s70 32 70 72v28" fill="none" stroke-width="26"/>
+    <path d="M323 443c0-106 84-192 189-192s189 86 189 192v281c0 52-42 94-94 94H417c-52 0-94-42-94-94V443Z" fill="url(#bag)" stroke-width="25"/>
+    <path d="M323 493h-28c-30 0-54 24-54 54v127c0 30 24 54 54 54h28" fill="#B9D3EB" stroke-width="25"/>
+    <path d="M701 493h28c30 0 54 24 54 54v127c0 30-24 54-54 54h-28" fill="#B9D3EB" stroke-width="25"/>
+    <path d="M373 486c0-70 56-127 126-127h27c70 0 126 57 126 127" fill="none" stroke="#5B72D6" stroke-width="18" opacity=".62"/>
+    <path d="M362 599c0-36 29-65 65-65h170c36 0 65 29 65 65v133c0 36-29 65-65 65H427c-36 0-65-29-65-65V599Z" fill="url(#pocket)" stroke-width="25"/>
+    <path d="M409 613h207" fill="none" stroke="#A96814" stroke-width="16"/>
+    <path d="M409 613h207" fill="none" stroke="#FFD16A" stroke-width="7" stroke-dasharray="2 17"/>
+    <path d="M417 458h190" fill="none" stroke="#08244A" stroke-width="20"/>
+    <path d="M425 680h174" fill="none" stroke="#5B72D6" stroke-width="16"/>
+  </g>
+</svg>

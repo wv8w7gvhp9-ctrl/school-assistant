@@ -19,7 +19,7 @@ export default defineConfig({
         start_url: '/',
         icons: [
           {
-            src: '/icons/app-icon.svg',
+            src: '/icons/app-icon-backpack-v1.svg',
             sizes: 'any',
             type: 'image/svg+xml',
             purpose: 'any maskable',
