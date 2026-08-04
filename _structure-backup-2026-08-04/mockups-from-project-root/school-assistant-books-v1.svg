@@ -1,0 +1,157 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="863" height="1822" viewBox="0 0 863 1822">
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbf7fb"/>
+      <stop offset="1" stop-color="#f6f8fc"/>
+    </linearGradient>
+    <linearGradient id="nav" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#08244a"/>
+      <stop offset="1" stop-color="#041b3d"/>
+    </linearGradient>
+    <linearGradient id="bookCover" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8fa7e9"/>
+      <stop offset="1" stop-color="#b99ddf"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="12" stdDeviation="20" flood-color="#796d8c" flood-opacity="0.15"/>
+    </filter>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="7" stdDeviation="12" flood-color="#8290b1" flood-opacity="0.12"/>
+    </filter>
+    <clipPath id="screenClip"><rect x="67" y="55" width="729" height="1712" rx="72"/></clipPath>
+    <style>
+      .title { font: 700 58px -apple-system, BlinkMacSystemFont, "SF Pro Display", Arial, sans-serif; fill:#071c42; }
+      .h2 { font: 700 33px -apple-system, BlinkMacSystemFont, "SF Pro Display", Arial, sans-serif; fill:#071c42; }
+      .book-title { font: 700 27px -apple-system, BlinkMacSystemFont, "SF Pro Display", Arial, sans-serif; fill:#071c42; }
+      .body { font: 500 22px -apple-system, BlinkMacSystemFont, "SF Pro Text", Arial, sans-serif; fill:#55658c; }
+      .small { font: 500 18px -apple-system, BlinkMacSystemFont, "SF Pro Text", Arial, sans-serif; fill:#65749a; }
+      .pill { font: 600 22px -apple-system, BlinkMacSystemFont, "SF Pro Text", Arial, sans-serif; fill:#59668c; }
+      .button { font: 700 22px -apple-system, BlinkMacSystemFont, "SF Pro Text", Arial, sans-serif; fill:white; }
+      .nav-label { font: 500 16px -apple-system, BlinkMacSystemFont, "SF Pro Text", Arial, sans-serif; fill:white; }
+      .nav-active { fill:#ffd25f; }
+      .line { fill:none; stroke:#071c42; stroke-width:4; stroke-linecap:round; stroke-linejoin:round; }
+    </style>
+  </defs>
+
+  <rect width="863" height="1822" fill="#fbf8fb"/>
+  <rect x="45" y="28" width="773" height="1766" rx="94" fill="#17191d" filter="url(#shadow)"/>
+  <rect x="55" y="39" width="753" height="1744" rx="84" fill="#020306"/>
+  <g clip-path="url(#screenClip)">
+    <rect x="67" y="55" width="729" height="1712" fill="url(#page)"/>
+    <circle cx="110" cy="335" r="170" fill="#fff2f1" opacity="0.55"/>
+    <circle cx="754" cy="800" r="210" fill="#f1effe" opacity="0.45"/>
+
+    <!-- status bar -->
+    <text x="125" y="111" font-family="-apple-system,Arial" font-size="25" font-weight="700" fill="#07142e">9:41</text>
+    <rect x="343" y="72" width="178" height="48" rx="25" fill="#000"/>
+    <circle cx="496" cy="96" r="7" fill="#0a579b"/>
+    <g fill="#07142e">
+      <rect x="645" y="96" width="5" height="14" rx="2"/><rect x="655" y="90" width="5" height="20" rx="2"/>
+      <rect x="665" y="84" width="5" height="26" rx="2"/><rect x="675" y="78" width="5" height="32" rx="2"/>
+      <path d="M692 88q20-18 40 0l-7 8q-13-12-26 0z"/>
+      <rect x="740" y="82" width="39" height="25" rx="6" fill="none" stroke="#07142e" stroke-width="3"/>
+      <rect x="779" y="89" width="4" height="11" rx="2"/><rect x="744" y="86" width="29" height="17" rx="3"/>
+    </g>
+
+    <!-- header -->
+    <text class="title" x="108" y="221">Книги</text>
+    <rect x="609" y="162" width="145" height="92" rx="28" fill="#fff0c4" stroke="#ffe19a"/>
+    <text x="632" y="225" font-family="-apple-system,Arial" font-size="48" font-weight="700" fill="#071c42">12</text>
+    <path d="M714 182l8 16 18 2-13 13 3 18-16-8-16 8 3-18-13-13 18-2z" fill="#ffb51d"/>
+
+    <!-- filters -->
+    <rect x="108" y="285" width="174" height="78" rx="27" fill="#fff0cf" stroke="#f6b63f" stroke-width="2"/>
+    <text class="pill" x="195" y="334" text-anchor="middle" fill="#071c42">Все</text>
+    <rect x="297" y="285" width="210" height="78" rx="27" fill="#f8f5fd" stroke="#dcd6ee" stroke-width="2"/>
+    <text class="pill" x="402" y="334" text-anchor="middle">Читаю</text>
+    <rect x="522" y="285" width="232" height="78" rx="27" fill="#f8f5fd" stroke="#dcd6ee" stroke-width="2"/>
+    <text class="pill" x="638" y="334" text-anchor="middle">Прочитано</text>
+
+    <!-- currently reading -->
+    <text class="h2" x="108" y="423">Сейчас читаю</text>
+    <rect x="108" y="455" width="646" height="420" rx="38" fill="#f1effd" stroke="#d8d0ef" stroke-width="2" filter="url(#soft)"/>
+    <rect x="139" y="493" width="186" height="246" rx="22" fill="url(#bookCover)"/>
+    <rect x="151" y="505" width="160" height="222" rx="15" fill="#aab9ee" opacity="0.45"/>
+    <path d="M169 613q29-29 59 0v61q-30-20-59 0zm59 0q29-29 59 0v61q-30-20-59 0z" fill="#fff8dd" stroke="#071c42" stroke-width="4"/>
+    <path d="M228 613v61" stroke="#071c42" stroke-width="4"/>
+    <circle cx="195" cy="560" r="19" fill="#ffd36b"/><path d="M186 559l7 7 13-16" class="line"/>
+    <text x="232" y="705" text-anchor="middle" font-family="-apple-system,Arial" font-size="17" font-weight="700" fill="#071c42">ПРИКЛЮЧЕНИЯ</text>
+    <text x="232" y="726" text-anchor="middle" font-family="-apple-system,Arial" font-size="17" font-weight="700" fill="#071c42">НЕЗНАЙКИ</text>
+
+    <text class="book-title" x="357" y="518">Приключения</text>
+    <text class="book-title" x="357" y="552">Незнайки</text>
+    <text class="body" x="357" y="591">Николай Носов</text>
+    <rect x="357" y="620" width="108" height="43" rx="19" fill="#dcd5f7"/>
+    <text x="411" y="648" text-anchor="middle" font-family="-apple-system,Arial" font-size="18" font-weight="700" fill="#6658a7">Читаю</text>
+    <g transform="translate(357 690)">
+      <circle cx="12" cy="12" r="10" fill="none" stroke="#6b78a0" stroke-width="3"/>
+      <path d="M12 6v7l5 3" fill="none" stroke="#6b78a0" stroke-width="3" stroke-linecap="round"/>
+      <text class="small" x="33" y="19">Начал 1 августа</text>
+    </g>
+    <rect x="357" y="757" width="345" height="76" rx="26" fill="#586fd4"/>
+    <text class="button" x="529" y="805" text-anchor="middle">Открыть дневник</text>
+
+    <!-- book list -->
+    <text class="h2" x="108" y="942">Мои книги</text>
+
+    <rect x="108" y="973" width="646" height="215" rx="34" fill="#edf5ff" stroke="#c5dcf6" stroke-width="2"/>
+    <rect x="137" y="1004" width="94" height="151" rx="16" fill="#91bce8"/>
+    <path d="M153 1055q15-15 31 0v48q-16-10-31 0zm31 0q15-15 31 0v48q-16-10-31 0z" fill="#fff7d7" stroke="#071c42" stroke-width="3"/>
+    <path d="M184 1055v48" stroke="#071c42" stroke-width="3"/>
+    <text x="184" y="1132" text-anchor="middle" font-family="-apple-system,Arial" font-size="13" font-weight="700" fill="#071c42">А. ПУШКИН</text>
+    <text class="book-title" x="258" y="1027">Сказка о рыбаке</text>
+    <text class="book-title" x="258" y="1060">и рыбке</text>
+    <text class="body" x="258" y="1097">Александр Пушкин</text>
+    <rect x="258" y="1113" width="196" height="44" rx="20" fill="#dbe9f8"/>
+    <text x="356" y="1142" text-anchor="middle" font-family="-apple-system,Arial" font-size="17" font-weight="700" fill="#4977a7">Нужно прочитать</text>
+    <rect x="604" y="1091" width="116" height="64" rx="23" fill="#5c8fd2"/>
+    <text x="662" y="1132" text-anchor="middle" font-family="-apple-system,Arial" font-size="19" font-weight="700" fill="white">Начать</text>
+
+    <rect x="108" y="1212" width="646" height="248" rx="34" fill="#eaf8f8" stroke="#b9e1e2" stroke-width="2"/>
+    <rect x="137" y="1244" width="94" height="154" rx="16" fill="#78c8cb"/>
+    <circle cx="184" cy="1293" r="28" fill="#fff0b5"/>
+    <path d="M169 1292q15-18 30 0v40q-15-9-30 0zm30 0q15-18 30 0v40q-15-9-30 0z" transform="translate(-15 0)" fill="#fff" stroke="#071c42" stroke-width="3"/>
+    <text x="184" y="1373" text-anchor="middle" font-family="-apple-system,Arial" font-size="12" font-weight="700" fill="#071c42">В. ДРАГУНСКИЙ</text>
+    <text class="book-title" x="258" y="1268">Денискины рассказы</text>
+    <text class="body" x="258" y="1305">Виктор Драгунский</text>
+    <rect x="258" y="1324" width="158" height="44" rx="20" fill="#d5eeee"/>
+    <path d="M276 1346l8 8 15-18" fill="none" stroke="#238e92" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="360" y="1353" text-anchor="middle" font-family="-apple-system,Arial" font-size="17" font-weight="700" fill="#238e92">Прочитано</text>
+    <text class="small" x="258" y="1407">Моя оценка</text>
+    <g fill="#ffbb28" transform="translate(403 1382)">
+      <path d="M12 0l4 8 9 1-7 7 2 9-8-4-8 4 2-9-7-7 9-1z"/>
+      <path d="M42 0l4 8 9 1-7 7 2 9-8-4-8 4 2-9-7-7 9-1z"/>
+      <path d="M72 0l4 8 9 1-7 7 2 9-8-4-8 4 2-9-7-7 9-1z"/>
+      <path d="M102 0l4 8 9 1-7 7 2 9-8-4-8 4 2-9-7-7 9-1z"/>
+      <path d="M132 0l4 8 9 1-7 7 2 9-8-4-8 4 2-9-7-7 9-1z"/>
+    </g>
+
+    <!-- bottom navigation -->
+    <rect x="79" y="1583" width="705" height="184" rx="55" fill="url(#nav)"/>
+    <g transform="translate(142 1614)">
+      <path d="M0 31l24-20 24 20v30H33V42H15v19H0z" fill="none" stroke="white" stroke-width="5" stroke-linejoin="round"/>
+      <text class="nav-label" x="24" y="94" text-anchor="middle">Сегодня</text>
+    </g>
+    <g transform="translate(270 1614)">
+      <rect x="2" y="17" width="44" height="42" rx="8" fill="none" stroke="white" stroke-width="5"/>
+      <path d="M2 30h44M13 10v14M35 10v14" stroke="white" stroke-width="5" stroke-linecap="round"/>
+      <circle cx="15" cy="43" r="3" fill="white"/><circle cx="32" cy="43" r="3" fill="white"/>
+      <text class="nav-label" x="24" y="94" text-anchor="middle">Расписание</text>
+    </g>
+    <g transform="translate(409 1614)">
+      <rect x="5" y="15" width="39" height="48" rx="7" fill="none" stroke="white" stroke-width="5"/>
+      <path d="M15 15v-6h19v6M15 35l6 6 13-15" fill="none" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <text class="nav-label" x="24" y="94" text-anchor="middle">Домашка</text>
+    </g>
+    <g transform="translate(548 1599)">
+      <circle cx="24" cy="39" r="38" fill="#ffd16a"/>
+      <path d="M1 27q22-11 23 7v29q-11-10-23-4zm46 0q-22-11-23 7v29q11-10 23-4z" fill="none" stroke="white" stroke-width="5" stroke-linejoin="round"/>
+      <text class="nav-label nav-active" x="24" y="109" text-anchor="middle">Книги</text>
+    </g>
+    <g transform="translate(687 1614)">
+      <path d="M7 12h36v13c0 15-8 28-18 28S7 40 7 25zM7 19H0v8c0 8 5 13 12 13M43 19h7v8c0 8-5 13-12 13M16 64h18M25 53v11" fill="none" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <text class="nav-label" x="25" y="94" text-anchor="middle">Кружки</text>
+    </g>
+  </g>
+  <rect x="67" y="55" width="729" height="1712" rx="72" fill="none" stroke="#42454b" stroke-width="2"/>
+</svg>

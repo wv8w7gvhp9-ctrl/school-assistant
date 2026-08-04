@@ -1,0 +1,55 @@
+:root {
+  --color-canvas: #fbf8fb;
+  --color-surface: #fffcfa;
+  --color-surface-subtle: #f8f6fd;
+  --color-surface-strong: #f1effd;
+  --color-primary: #08244a;
+  --color-primary-hover: #0c3265;
+  --color-primary-pressed: #061a37;
+  --color-primary-soft: #e7ebfa;
+  --color-text: #071c42;
+  --color-text-muted: #596b99;
+  --color-text-soft: #7d88a8;
+  --color-on-primary: #fff;
+  --color-border: #dcd8ec;
+  --color-border-strong: #aebbe0;
+  --color-focus: #2f6fdb;
+  --color-success: #287c67;
+  --color-success-soft: #ddf1e9;
+  --color-warning: #a96814;
+  --color-warning-soft: #f8e9cd;
+  --color-danger: #b54f62;
+  --color-danger-soft: #f7dfe4;
+  --color-info: #4775b8;
+  --color-info-soft: #e1eaf7;
+  --color-offline: #6e6470;
+  --color-accent-pink: #ea708b;
+  --color-accent-aqua: #78c8cb;
+  --color-accent-gold: #ffd16a;
+  --color-accent-blue: #5b72d6;
+  --color-soft-blue: #edf5ff;
+  --color-soft-aqua: #eaf8f8;
+  --color-soft-blush: #fff1f2;
+  --color-soft-apricot: #fff0cf;
+  --color-soft-lilac: #f1effd;
+  --color-subject-russian: #d46c88;
+  --color-subject-mathematics: #648bd2;
+  --color-subject-reading: #9a72b0;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px;
+  --radius-sm: 10px; --radius-md: 14px; --radius-lg: 18px; --radius-xl: 24px; --radius-pill: 999px;
+  --shadow-card: 0 8px 24px rgb(7 28 66 / 8%);
+  --shadow-raised: 0 14px 36px rgb(7 28 66 / 14%);
+  --motion-fast: 120ms; --motion-base: 180ms; --motion-slow: 260ms;
+  font-family: Manrope, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--color-text);
+  background: var(--color-canvas);
+}
+
+* { box-sizing: border-box; }
+html { min-width: 320px; background: var(--color-canvas); }
+body { min-width: 320px; min-height: 100vh; margin: 0; background: var(--color-canvas); }
+button, input { font: inherit; }
+button { cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+button:disabled { cursor: not-allowed; opacity: .58; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 1ms !important; animation-duration: 1ms !important; } }
