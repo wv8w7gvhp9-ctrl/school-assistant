@@ -9,7 +9,7 @@ const weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт']
 
 function Today() {
   return <section className="screen"><div className="screen-heading"><div><p className="eyebrow">Понедельник, 3 августа</p><h1>Привет, {child.name}!</h1></div><StarCounter value={child.stars} /></div>
-    <article className="hero-card"><div><p className="eyebrow">Ближайшее событие</p><h2>Первый урок в 09:00</h2><p>Математика · Сегодня всё получится</p></div><div className="hero-icon" aria-hidden="true"><Icon name="backpack" /></div></article>
+    <article className="hero-card"><div><p className="eyebrow">Ближайшее событие</p><h2>Первый урок в 09:00</h2><p>Математика · Сегодня всё получится</p></div><div className="hero-icon" aria-hidden="true"><Icon name="sun" /></div></article>
     <SectionTitle action="Все">Уроки сегодня</SectionTitle>
     <div className="card lesson-list">{todayLessons.map((lesson) => <div className="lesson-row" key={lesson.time}><time>{lesson.time}</time><span className={`subject-dot ${lesson.title === 'Русский язык' ? 'russian' : lesson.title === 'Чтение' ? 'reading' : 'math'}`} /><div><strong>{lesson.title}</strong><p>{lesson.things.join(' · ')}</p></div></div>)}</div>
     <SectionTitle>После уроков</SectionTitle>
