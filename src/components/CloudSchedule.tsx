@@ -16,9 +16,10 @@ function samaraNow() {
 export function CloudSchedule() {
   const today = useMemo(samaraNow, [])
   const [selectedDay, setSelectedDay] = useState(today.weekday > 5 ? 1 : today.weekday)
+  const [weekOffset, setWeekOffset] = useState(0)
   const [lessons, setLessons] = useState<CloudLesson[]>([])
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
-  const selectedDate = isoDateForWeekday(today.iso, today.weekday, selectedDay)
+  const selectedDate = isoDateForWeekday(today.iso, today.weekday, selectedDay + weekOffset * 7)
 
   useEffect(() => {
     const client = supabase
@@ -39,10 +40,11 @@ export function CloudSchedule() {
 
   const dayLessons = lessons.filter((lesson) => lesson.weekday === selectedDay)
   const selected = childWeekdays.find((day) => day.value === selectedDay) ?? childWeekdays[0]
-  const isToday = selectedDay === today.weekday
+  const isToday = weekOffset === 0 && selectedDay === today.weekday
 
   return <section className="screen"><div className="screen-heading"><div><p className="eyebrow">Моя неделя</p><h1>Расписание</h1></div></div>
-    <div className="day-picker" aria-label="Выберите день">{childWeekdays.map((day) => <button type="button" onClick={() => setSelectedDay(day.value)} className={`${day.value === selectedDay ? 'selected ' : ''}${day.value === today.weekday ? 'today' : ''}`} aria-pressed={day.value === selectedDay} aria-label={`${day.full}${day.value === today.weekday ? ', сегодня' : ''}`} key={day.value}>{day.short}</button>)}</div>
+    <div className="week-picker" aria-label="Выберите неделю"><button type="button" className={weekOffset === 0 ? 'selected' : ''} onClick={() => setWeekOffset(0)}>Эта неделя</button><button type="button" className={weekOffset === 1 ? 'selected' : ''} onClick={() => setWeekOffset(1)}>Следующая</button></div>
+    <div className="day-picker" aria-label="Выберите день">{childWeekdays.map((day) => <button type="button" onClick={() => setSelectedDay(day.value)} className={`${day.value === selectedDay ? 'selected ' : ''}${weekOffset === 0 && day.value === today.weekday ? 'today' : ''}`} aria-pressed={day.value === selectedDay} aria-label={`${day.full}${weekOffset === 0 && day.value === today.weekday ? ', сегодня' : ''}`} key={day.value}>{day.short}</button>)}</div>
     <p className="date-label">{isToday ? `Сегодня, ${today.label}` : selected.full}</p>
     {state === 'loading' && <p className="child-cloud-state" role="status">Загружаем твоё расписание…</p>}
     {state === 'error' && <p className="auth-message error" role="alert">Не получилось загрузить расписание. Проверь интернет и обнови страницу.</p>}
