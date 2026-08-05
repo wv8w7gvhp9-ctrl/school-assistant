@@ -108,3 +108,24 @@ p { color: var(--color-text-muted); font-size: 16px; line-height: 1.5; }
 .rating-field button.selected { border-color: var(--color-accent-gold); background: var(--color-soft-apricot); }
 @media (min-width: 768px) { .sheet-backdrop { align-items: center; padding: var(--space-6); }.reading-diary-sheet { max-height: 88dvh; border-radius: var(--radius-xl); } }
 @media (max-width: 374px) { .cloud-book-card { display: grid; grid-template-columns: auto minmax(0, 1fr); }.cloud-book-card .text-button { grid-column: 1 / -1; min-height: 48px; justify-content: center; }.rating-field > div { grid-template-columns: repeat(5, minmax(44px, 1fr)); gap: var(--space-1); } }
+
+/* Кружки: регулярное расписание, напоминания и изменения на дату. */
+.parent-clubs { display: grid; gap: var(--space-3); margin-top: var(--space-5); padding-top: var(--space-5); border-top: 1px solid var(--color-border); }
+.parent-club-form { padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-subtle); }
+.switch-row { display: flex; align-items: center; gap: var(--space-3); min-height: 48px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+.switch-row input { width: 22px; height: 22px; flex: 0 0 auto; accent-color: var(--color-success); }
+.parent-club-list { display: grid; gap: var(--space-3); margin-top: var(--space-3); }
+.parent-club-row { display: grid; gap: var(--space-2); padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-subtle); }
+.parent-club-row > span { color: var(--color-text-muted); font-size: 14px; font-weight: 700; }
+.parent-club-exception { padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-subtle); font-size: 14px; }
+.cloud-next-club { overflow: hidden; }
+.club-date { margin-top: var(--space-1); color: var(--color-text); font-weight: 700; }
+.club-change-status { display: inline-flex; width: fit-content; margin-top: var(--space-3); padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill); color: var(--color-info); background: var(--color-info-soft); font-size: 14px; font-weight: 700; }
+.club-things-list { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
+.club-thing { display: flex; align-items: center; gap: var(--space-2); min-height: 48px; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); color: var(--color-text); background: var(--color-surface); font-weight: 700; }
+.club-thing .icon { color: var(--color-success); }
+.club-changes, .regular-clubs { display: grid; gap: var(--space-3); }
+.club-change-row { display: grid; gap: var(--space-1); background: var(--color-danger-soft); }
+.club-change-row span { color: var(--color-danger); font-weight: 700; }
+.regular-clubs .club-row { align-items: flex-start; }
+.regular-clubs .club-row span:not(.club-icon) { display: block; margin-top: var(--space-2); color: var(--color-text-muted); font-size: 14px; font-weight: 700; }

@@ -4,6 +4,7 @@ import { AuthGate } from './components/AuthGate'
 import { CloudSchedule } from './components/CloudSchedule'
 import { CloudHomework } from './components/CloudHomework'
 import { CloudBooks } from './components/CloudBooks'
+import { CloudClubs } from './components/CloudClubs'
 import { useChildSession } from './components/ChildSession'
 import { Icon } from './components/Icon'
 import { SectionTitle, StarCounter, StatusChip } from './components/UI'
@@ -71,6 +72,11 @@ function DemoBooks() {
 }
 
 function Clubs() {
+  const cloudProfile = useChildSession()
+  return cloudProfile ? <CloudClubs /> : <DemoClubs />
+}
+
+function DemoClubs() {
   return <section className="screen"><div className="screen-heading"><div><p className="eyebrow">После уроков</p><h1>Кружки</h1></div></div>
     <article className="next-club"><div className="club-icon large"><Icon name="clubs" /></div><p className="eyebrow">Ближайшее занятие</p><h2>{clubs[0].title}</h2><p>{clubs[0].time} · {clubs[0].location}</p><div className="reminder"><Icon name="clock" />{clubs[0].reminder}</div><h3>Что взять с собой</h3>{clubs[0].things.map((thing) => <label className="check-row" key={thing}><input type="checkbox" /> <span>{thing}</span></label>)}</article>
     <SectionTitle>Регулярные занятия</SectionTitle><div className="club-list">{clubs.map((club) => <article className="card club-row" key={club.id}><span className="club-icon"><Icon name="clubs" /></span><div><h2>{club.title}</h2><p>{club.time} · {club.location}</p></div><Icon name="chevron" /></article>)}</div>
