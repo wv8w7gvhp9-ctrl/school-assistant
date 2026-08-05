@@ -5,6 +5,13 @@ export type CloudLesson = {
   ends_at: string
   subject_title: string
   things: string[]
+  status: 'regular' | 'cancelled' | 'replacement' | 'extra'
+}
+
+export function isoDateForWeekday(todayIso: string, todayWeekday: number, weekday: number): string {
+  const date = new Date(`${todayIso}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + weekday - todayWeekday)
+  return date.toISOString().slice(0, 10)
 }
 
 export const childWeekdays = [

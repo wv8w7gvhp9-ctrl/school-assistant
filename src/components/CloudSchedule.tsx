@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import { childWeekdays, mondayFirstWeekday, timeRange, type CloudLesson } from '../domain/childSchedule'
+import { childWeekdays, isoDateForWeekday, mondayFirstWeekday, timeRange, type CloudLesson } from '../domain/childSchedule'
 import { supabase } from '../lib/supabase'
 
 function samaraNow() {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Europe/Samara', weekday: 'short', day: 'numeric', month: 'long', year: 'numeric',
   }).formatToParts(new Date())
+  const numericParts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Samara', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date())
   const value = (kind: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === kind)?.value ?? ''
   const dayNames: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 }
-  return { weekday: dayNames[value('weekday')] ?? 1, label: `${value('day')} ${value('month')} ${value('year')}` }
+  const numericValue = (kind: Intl.DateTimeFormatPartTypes) => numericParts.find((part) => part.type === kind)?.value ?? ''
+  return { weekday: dayNames[value('weekday')] ?? 1, label: `${value('day')} ${value('month')} ${value('year')}`, iso: `${numericValue('year')}-${numericValue('month')}-${numericValue('day')}` }
 }
 
 export function CloudSchedule() {
@@ -16,12 +18,14 @@ export function CloudSchedule() {
   const [selectedDay, setSelectedDay] = useState(today.weekday > 5 ? 1 : today.weekday)
   const [lessons, setLessons] = useState<CloudLesson[]>([])
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const selectedDate = isoDateForWeekday(today.iso, today.weekday, selectedDay)
 
   useEffect(() => {
     const client = supabase
     if (!client) return
     let active = true
-    void client.rpc('get_my_weekly_lessons').then(({ data, error }) => {
+    setState('loading')
+    void client.rpc('get_my_schedule_for_date', { input_day: selectedDate }).then(({ data, error }) => {
       if (!active) return
       if (error) {
         setState('error')
@@ -31,7 +35,7 @@ export function CloudSchedule() {
       setState('ready')
     })
     return () => { active = false }
-  }, [])
+  }, [selectedDate])
 
   const dayLessons = lessons.filter((lesson) => lesson.weekday === selectedDay)
   const selected = childWeekdays.find((day) => day.value === selectedDay) ?? childWeekdays[0]
@@ -43,6 +47,6 @@ export function CloudSchedule() {
     {state === 'loading' && <p className="child-cloud-state" role="status">Загружаем твоё расписание…</p>}
     {state === 'error' && <p className="auth-message error" role="alert">Не получилось загрузить расписание. Проверь интернет и обнови страницу.</p>}
     {state === 'ready' && dayLessons.length === 0 && <p className="child-cloud-state">На этот день уроков пока нет.</p>}
-    {state === 'ready' && dayLessons.length > 0 && <div className="timeline">{dayLessons.map((lesson) => <article className="lesson-card" key={`${lesson.weekday}-${lesson.lesson_order}`}><time>{timeRange(lesson)}</time><span className="timeline-dot" /><div><p className="eyebrow">Урок {lesson.lesson_order}</p><h2>{lesson.subject_title}</h2></div>{lesson.things.length > 0 && <p className="lesson-things">Взять: {lesson.things.join(' · ')}</p>}</article>)}</div>}
+    {state === 'ready' && dayLessons.length > 0 && <div className="timeline">{dayLessons.map((lesson) => <article className={`lesson-card ${lesson.status === 'cancelled' ? 'cancelled-lesson' : ''}`} key={`${lesson.weekday}-${lesson.lesson_order}`}><time>{timeRange(lesson)}</time><span className="timeline-dot" /><div><p className="eyebrow">{lesson.status === 'cancelled' ? 'Урок отменён' : lesson.status === 'replacement' ? 'Замена' : `Урок ${lesson.lesson_order}`}</p><h2>{lesson.subject_title}</h2></div>{lesson.status !== 'cancelled' && lesson.things.length > 0 && <p className="lesson-things">Взять: {lesson.things.join(' · ')}</p>}</article>)}</div>}
   </section>
 }
