@@ -70,6 +70,9 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
   const [confirmDiscard, setConfirmDiscard] = useState(false)
   const [lessonPendingDeletion, setLessonPendingDeletion] = useState<WeeklyLesson | null>(null)
   const [deletingLesson, setDeletingLesson] = useState(false)
+  const [cancellationDate, setCancellationDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [cancellationLessonId, setCancellationLessonId] = useState('')
+  const [savingCancellation, setSavingCancellation] = useState(false)
 
   const loadYears = async () => {
     const client = supabase
@@ -257,6 +260,28 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
     setMessage('Урок удалён из недельного расписания.')
   }
 
+  async function cancelLessonForDate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!supabase || !cancellationDate || !cancellationLessonId) return
+    setSavingCancellation(true)
+    setError('')
+    setMessage('')
+    const { error: cancellationError } = await supabase.from('lesson_exceptions').insert({
+      family_id: familyId,
+      day: cancellationDate,
+      weekly_lesson_id: cancellationLessonId,
+      kind: 'cancelled',
+    })
+    setSavingCancellation(false)
+    if (cancellationError) {
+      setError(cancellationError.code === '23505'
+        ? 'Для этого урока на эту дату отмена уже сохранена.'
+        : 'Не удалось сохранить отмену. Проверьте интернет и попробуйте ещё раз.')
+      return
+    }
+    setMessage('Отмена урока на выбранную дату сохранена.')
+  }
+
   const selectedYear = years.find((year) => year.id === selectedYearId)
 
   return <section className="parent-schedule" aria-labelledby="parent-schedule-title">
@@ -279,6 +304,18 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
         <h3>Добавить урок</h3>
         <LessonFields draft={lessonDraft} setDraft={setLessonDraft} />
         <button className="primary-button" type="submit" disabled={savingLesson}>{savingLesson ? 'Сохраняем…' : 'Добавить урок'}</button>
+      </form>}
+      {selectedYear && lessons.length > 0 && <form className="parent-exception-form" onSubmit={cancelLessonForDate}>
+        <h3>Отменить урок на дату</h3>
+        <p>Недельное расписание не изменится: отмена подействует только в выбранный день.</p>
+        <label htmlFor="cancellation-date">Дата</label>
+        <input id="cancellation-date" type="date" value={cancellationDate} onChange={(event) => setCancellationDate(event.target.value)} required />
+        <label htmlFor="cancellation-lesson">Урок</label>
+        <select id="cancellation-lesson" className="parent-select" value={cancellationLessonId} onChange={(event) => setCancellationLessonId(event.target.value)} required>
+          <option value="" disabled>Выберите урок</option>
+          {lessons.map((lesson) => <option value={lesson.id} key={lesson.id}>{weekdays.find((day) => day.value === lesson.weekday)?.label}: {lesson.lesson_order}. {subjectTitle(lesson)} · {localTime(lesson.starts_at)}</option>)}
+        </select>
+        <button className="secondary-button" type="submit" disabled={savingCancellation || !cancellationLessonId}>{savingCancellation ? 'Сохраняем отмену…' : 'Отменить урок на дату'}</button>
       </form>}
       <div className="parent-lessons" aria-live="polite">
         <h3>Сохранённые уроки</h3>
