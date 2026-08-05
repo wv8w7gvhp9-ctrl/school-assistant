@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, turnstileSiteKey } from '../lib/supabase'
-import { ParentScheduleEditor } from './ParentScheduleEditor'
-import { ParentHomeworkEditor } from './ParentHomeworkEditor'
-import { ParentBooksEditor } from './ParentBooksEditor'
-import { ParentClubsEditor } from './ParentClubsEditor'
-import { ParentBackpackReview } from './ParentBackpackReview'
 import { ChildSessionProvider } from './ChildSession'
 import { Turnstile } from './Turnstile'
+
+const ParentScheduleEditor = lazy(() => import('./ParentScheduleEditor').then((module) => ({ default: module.ParentScheduleEditor })))
+const ParentHomeworkEditor = lazy(() => import('./ParentHomeworkEditor').then((module) => ({ default: module.ParentHomeworkEditor })))
+const ParentBooksEditor = lazy(() => import('./ParentBooksEditor').then((module) => ({ default: module.ParentBooksEditor })))
+const ParentClubsEditor = lazy(() => import('./ParentClubsEditor').then((module) => ({ default: module.ParentClubsEditor })))
+const ParentBackpackReview = lazy(() => import('./ParentBackpackReview').then((module) => ({ default: module.ParentBackpackReview })))
 
 type AuthState = 'idle' | 'sending' | 'sent' | 'error'
 type FamilyProfile = { family_id: string; child_id: string; child_name: string }
@@ -69,11 +70,7 @@ function ParentSignedIn({ session }: { session: Session }) {
     {loadingFamily && <p className="auth-loading">Проверяем семейный профиль…</p>}
     {!loadingFamily && !family && <form className="auth-form" onSubmit={createFamily}><label htmlFor="child-name">Как зовут ребёнка?</label><p className="field-help">Достаточно имени или домашнего псевдонима. Другие личные данные не нужны.</p><input id="child-name" name="child-name" type="text" autoComplete="off" maxLength={48} value={childName} onChange={(event) => { setChildName(event.target.value); setFamilyError('') }} placeholder="Например, Миша" required /><button className="primary-button" type="submit" disabled={creatingFamily}>{creatingFamily ? 'Создаём профиль…' : 'Создать семейный профиль'}</button></form>}
     {family && <div className="family-success" role="status"><strong>Семья создана</strong><p>Профиль ребёнка: {family.child_name}.</p></div>}
-    {family && <ParentScheduleEditor familyId={family.family_id} />}
-    {family && <ParentHomeworkEditor familyId={family.family_id} childId={family.child_id} />}
-    {family && <ParentBooksEditor familyId={family.family_id} childId={family.child_id} />}
-    {family && <ParentClubsEditor familyId={family.family_id} childId={family.child_id} />}
-    {family && <ParentBackpackReview />}
+    {family && <Suspense fallback={<p className="auth-loading" role="status">Открываем данные семьи…</p>}><ParentScheduleEditor familyId={family.family_id} /><ParentHomeworkEditor familyId={family.family_id} childId={family.child_id} /><ParentBooksEditor familyId={family.family_id} childId={family.child_id} /><ParentClubsEditor familyId={family.family_id} childId={family.child_id} /><ParentBackpackReview /></Suspense>}
     {family && <section className="link-code-panel"><h2>Подключить устройство ребёнка</h2><p>Откройте приложение на устройстве ребёнка, выберите «Подключить устройство ребёнка» и введите этот код.</p>{linkCode ? <div className="link-code" role="status"><strong>{linkCode.display_code}</strong><span>Код действует 15 минут и сработает только один раз.</span></div> : <button type="button" className="primary-button" onClick={createLinkCode} disabled={creatingCode}>{creatingCode ? 'Создаём код…' : 'Получить код подключения'}</button>}</section>}
     {familyError && <p className="auth-message error" role="alert">{familyError}</p>}
     <button type="button" className="secondary-button auth-button" onClick={signOut} disabled={signingOut}>{signingOut ? 'Выходим…' : 'Выйти'}</button>

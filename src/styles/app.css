@@ -159,3 +159,9 @@ p { color: var(--color-text-muted); font-size: 16px; line-height: 1.5; }
 .parent-backpack-review ul { display: grid; gap: var(--space-1); margin: 0; padding-left: var(--space-5); color: var(--color-text-muted); }
 @media (min-width: 768px) { .backpack-sheet { max-height: 88dvh; border-radius: var(--radius-xl); }.cloud-today .lesson-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 374px) { .cloud-today .screen-heading { align-items: flex-start; }.cloud-today .screen-heading h1 { font-size: 24px; }.cloud-today .star-counter { min-width: 72px; }.today-homework { display: grid; }.today-homework .status-chip { white-space: normal; } }
+
+/* Честное состояние временной работы без сети. */
+.offline-banner { display: flex; align-items: center; gap: var(--space-2); width: min(calc(100% - 32px), 648px); margin: 0 auto var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid var(--color-offline); border-radius: var(--radius-lg); color: var(--color-text); background: var(--color-surface-strong); }
+.offline-banner span { color: var(--color-text-muted); font-size: 14px; }
+.offline-data-note { padding: var(--space-2) var(--space-3); border: 1px solid var(--color-offline); border-radius: var(--radius-md); color: var(--color-offline); background: var(--color-surface-strong); font-size: 13px; font-weight: 700; }
+@media (max-width: 374px) { .offline-banner { align-items: flex-start; flex-direction: column; } }

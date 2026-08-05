@@ -1,16 +1,17 @@
-import { useState, type ReactElement } from 'react'
+import { lazy, Suspense, useState, type ReactElement } from 'react'
 import { AppShell } from './components/AppShell'
 import { AuthGate } from './components/AuthGate'
-import { CloudSchedule } from './components/CloudSchedule'
-import { CloudHomework } from './components/CloudHomework'
-import { CloudBooks } from './components/CloudBooks'
-import { CloudClubs } from './components/CloudClubs'
-import { CloudToday } from './components/CloudToday'
 import { useChildSession } from './components/ChildSession'
 import { Icon } from './components/Icon'
 import { SectionTitle, StarCounter, StatusChip } from './components/UI'
 import { books, child, clubs, homework, todayLessons } from './data/demo'
 import type { ChildTab } from './domain/types'
+
+const CloudToday = lazy(() => import('./components/CloudToday').then((module) => ({ default: module.CloudToday })))
+const CloudSchedule = lazy(() => import('./components/CloudSchedule').then((module) => ({ default: module.CloudSchedule })))
+const CloudHomework = lazy(() => import('./components/CloudHomework').then((module) => ({ default: module.CloudHomework })))
+const CloudBooks = lazy(() => import('./components/CloudBooks').then((module) => ({ default: module.CloudBooks })))
+const CloudClubs = lazy(() => import('./components/CloudClubs').then((module) => ({ default: module.CloudClubs })))
 
 const weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт']
 
@@ -90,5 +91,5 @@ const screens: Record<ChildTab, () => ReactElement> = { today: Today, schedule: 
 export function App() {
   const [activeTab, setActiveTab] = useState<ChildTab>('today')
   const Screen = screens[activeTab]
-  return <AuthGate><AppShell activeTab={activeTab} onTabChange={setActiveTab}><Screen /></AppShell></AuthGate>
+  return <AuthGate><AppShell activeTab={activeTab} onTabChange={setActiveTab}><Suspense fallback={<p className="child-cloud-state" role="status">Открываем раздел…</p>}><Screen /></Suspense></AppShell></AuthGate>
 }

@@ -7,11 +7,14 @@ import { clubTimeRange, type ClubOccurrence } from '../domain/clubs'
 import { samaraIsoDate, type CloudHomeworkAssignment } from '../domain/homework'
 import { activeTodayClubs, activeTodayLessons, actionableTodayHomework, backpackProgress, formatFullRussianDate, type BackpackItem, type BackpackStatus } from '../domain/today'
 import { supabase } from '../lib/supabase'
+import { loadWithOfflineFallback, offlineKey, saveOfflineSnapshot } from '../lib/offlineCache'
+import { OfflineDataNote, useOnlineStatus } from './NetworkStatus'
 
 type BackpackResponseRow = BackpackItem & { item_id: string | null; item_text: string | null; subject_titles: string[] | null; checked: boolean | null }
 
 export function CloudToday() {
   const profile = useChildSession()
+  const online = useOnlineStatus()
   const today = useMemo(samaraIsoDate, [])
   const [lessons, setLessons] = useState<CloudLesson[]>([])
   const [homework, setHomework] = useState<CloudHomeworkAssignment[]>([])
@@ -25,44 +28,46 @@ export function CloudToday() {
   const [busyItemId, setBusyItemId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState('')
+  const [cachedAt, setCachedAt] = useState<string | null>(null)
 
   async function loadToday() {
-    if (!supabase) return
+    if (!supabase || !profile) return
     setState('loading')
     const [lessonResult, homeworkResult, clubResult, backpackResult, starResult] = await Promise.all([
-      supabase.rpc('get_my_schedule_for_date', { input_day: today }),
-      supabase.rpc('get_my_homework'),
-      supabase.rpc('get_my_club_occurrences', { input_from: today, input_to: today }),
-      supabase.rpc('get_my_backpack'),
-      supabase.rpc('get_my_star_count'),
+      loadWithOfflineFallback<CloudLesson[]>(offlineKey.schedule(profile.childId, today), () => supabase!.rpc('get_my_schedule_for_date', { input_day: today }), online),
+      loadWithOfflineFallback<CloudHomeworkAssignment[]>(offlineKey.homework(profile.childId), () => supabase!.rpc('get_my_homework'), online),
+      loadWithOfflineFallback<ClubOccurrence[]>(offlineKey.clubOccurrences(profile.childId, today, today), () => supabase!.rpc('get_my_club_occurrences', { input_from: today, input_to: today }), online),
+      loadWithOfflineFallback<BackpackResponseRow[]>(offlineKey.backpack(profile.childId), () => supabase!.rpc('get_my_backpack'), online),
+      loadWithOfflineFallback<number>(offlineKey.stars(profile.childId), () => supabase!.rpc('get_my_star_count'), online),
     ])
-    const requestError = lessonResult.error ?? homeworkResult.error ?? clubResult.error
-    if (requestError) {
-      console.error('Не удалось загрузить экран «Сегодня»', requestError)
+    if (lessonResult.source === 'none' || homeworkResult.source === 'none' || clubResult.source === 'none') {
+      console.error('Не удалось загрузить экран «Сегодня»', lessonResult.error ?? homeworkResult.error ?? clubResult.error)
       setState('error')
       return
     }
-    setLessons((lessonResult.data ?? []) as CloudLesson[])
-    setHomework((homeworkResult.data ?? []) as CloudHomeworkAssignment[])
-    setClubs((clubResult.data ?? []) as ClubOccurrence[])
-    if (backpackResult.error) {
+    setLessons(lessonResult.data ?? [])
+    setHomework(homeworkResult.data ?? [])
+    setClubs(clubResult.data ?? [])
+    if (backpackResult.source === 'none') {
       console.error('Не удалось подготовить рюкзак', backpackResult.error)
       setBackpackError(true)
       setBackpack([])
       setBackpackMeta(null)
     } else {
-      const backpackRows = (backpackResult.data ?? []) as BackpackResponseRow[]
+      const backpackRows = backpackResult.data ?? []
       const firstBackpackRow = backpackRows[0]
       setBackpack(backpackRows.filter((row) => row.item_id && row.item_text).map((row) => ({ checklist_id: row.checklist_id, target_day: row.target_day, status: row.status, item_id: row.item_id!, item_text: row.item_text!, subject_titles: row.subject_titles ?? [], checked: Boolean(row.checked) })))
       setBackpackMeta(firstBackpackRow ? { id: firstBackpackRow.checklist_id, day: firstBackpackRow.target_day, status: firstBackpackRow.status } : null)
       setBackpackError(false)
     }
-    if (starResult.error) console.error('Не удалось загрузить число звёзд', starResult.error)
-    setStars(starResult.error ? 0 : Number(starResult.data ?? 0))
+    if (starResult.source === 'none') console.error('Не удалось загрузить число звёзд', starResult.error)
+    setStars(starResult.source === 'none' ? 0 : Number(starResult.data ?? 0))
+    const cachedResult = [lessonResult, homeworkResult, clubResult, backpackResult, starResult].find((result) => result.source === 'cache')
+    setCachedAt(cachedResult?.savedAt ?? null)
     setState('ready')
   }
 
-  useEffect(() => { void loadToday() }, [])
+  useEffect(() => { void loadToday() }, [online, profile])
 
   const todayLessons = activeTodayLessons(lessons)
   const todayHomework = actionableTodayHomework(homework, today)
@@ -72,7 +77,7 @@ export function CloudToday() {
   const firstClub = todayClubs[0]
 
   async function toggleItem(item: BackpackItem) {
-    if (!supabase || busyItemId || backpackMeta?.status !== 'packing') return
+    if (!supabase || !profile || !online || busyItemId || backpackMeta?.status !== 'packing') return
     setBusyItemId(item.item_id)
     setMessage('')
     const nextChecked = !item.checked
@@ -80,12 +85,16 @@ export function CloudToday() {
     if (error) {
       console.error('Не удалось изменить вещь в рюкзаке', error)
       setMessage('Не получилось сохранить отметку. Проверь интернет и попробуй ещё раз.')
-    } else setBackpack((current) => current.map((currentItem) => currentItem.item_id === item.item_id ? { ...currentItem, checked: nextChecked } : currentItem))
+    } else {
+      const updated = backpack.map((currentItem) => currentItem.item_id === item.item_id ? { ...currentItem, checked: nextChecked } : currentItem)
+      setBackpack(updated)
+      await saveOfflineSnapshot(offlineKey.backpack(profile.childId), updated)
+    }
     setBusyItemId(null)
   }
 
   async function submitBackpack() {
-    if (!supabase || !backpackMeta || submitting || progress.total === 0 || progress.checked !== progress.total) return
+    if (!supabase || !profile || !online || !backpackMeta || submitting || progress.total === 0 || progress.checked !== progress.total) return
     setSubmitting(true)
     setMessage('')
     const { error } = await supabase.rpc('submit_my_backpack', { input_checklist_id: backpackMeta.id })
@@ -94,15 +103,18 @@ export function CloudToday() {
       setMessage('Не получилось отправить рюкзак. Проверь интернет и попробуй ещё раз.')
     } else {
       setBackpackMeta((current) => current ? { ...current, status: 'pending_review' } : current)
-      setBackpack((current) => current.map((item) => ({ ...item, status: 'pending_review' })))
+      const updated = backpack.map((item) => ({ ...item, status: 'pending_review' as const }))
+      setBackpack(updated)
+      await saveOfflineSnapshot(offlineKey.backpack(profile.childId), updated)
       setMessage('Рюкзак отправлен родителю на проверку.')
     }
     setSubmitting(false)
   }
 
   return <section className="screen cloud-today"><div className="screen-heading"><div><h1>Привет, {profile?.childName}!</h1><p className="today-date">{formatFullRussianDate(today)}</p></div><StarCounter value={stars} /></div>
+    {cachedAt && <OfflineDataNote savedAt={cachedAt} />}
     {state === 'loading' && <p className="child-cloud-state" role="status">Собираем твой сегодняшний день…</p>}
-    {state === 'error' && <div className="auth-message error" role="alert"><p>Не получилось загрузить сегодняшний день. Проверь интернет и попробуй ещё раз.</p><button type="button" className="secondary-button" onClick={() => void loadToday()}>Повторить</button></div>}
+    {state === 'error' && <div className="auth-message error" role="alert"><p>{online ? 'Не получилось загрузить сегодняшний день. Попробуй ещё раз.' : 'Сегодняшний день ещё не был сохранён на этом устройстве.'}</p><button type="button" className="secondary-button" onClick={() => void loadToday()}>Повторить</button></div>}
     {state === 'ready' && <>
       <article className="hero-card"><div><p className="eyebrow">{firstLesson ? 'Ближайшее событие' : firstClub ? 'После уроков' : 'Спокойный день'}</p><h2>{firstLesson ? `Первый урок в ${firstLesson.starts_at.slice(0, 5)}` : firstClub ? `${firstClub.title} в ${firstClub.starts_at.slice(0, 5)}` : 'Сегодня без занятий'}</h2><p>{firstLesson ? `${firstLesson.subject_title} · Сегодня всё получится` : firstClub ? 'Не забудь вещи с собой' : backpackMeta ? `Рюкзак собираем на ${formatFullRussianDate(backpackMeta.day).toLowerCase()}` : 'Можно отдохнуть и почитать'}</p></div><div className="hero-icon" aria-hidden="true"><Icon name={firstLesson ? 'sun' : firstClub ? 'clubs' : 'books'} /></div></article>
       <SectionTitle>Уроки сегодня</SectionTitle>
@@ -114,10 +126,10 @@ export function CloudToday() {
       {backpackError ? <div className="auth-message error" role="alert"><p>Не получилось подготовить рюкзак. Остальные данные дня доступны.</p><button type="button" className="secondary-button" onClick={() => void loadToday()}>Повторить</button></div> : !backpackMeta && <p className="screen-note">Ближайший учебный день пока не найден.</p>}
     </>}
     {backpackOpen && backpackMeta && <div className="sheet-backdrop"><section className="backpack-sheet" role="dialog" aria-modal="true" aria-labelledby="backpack-title"><div className="sheet-heading"><div><p className="eyebrow">На {formatFullRussianDate(backpackMeta.day).toLowerCase()}</p><h2 id="backpack-title">Собрать рюкзак</h2></div><button type="button" className="sheet-close" aria-label="Закрыть рюкзак" onClick={() => setBackpackOpen(false)}>×</button></div>
-      {backpack.length === 0 ? <div className="child-cloud-state"><strong>Список вещей пуст</strong><p>Попроси родителя добавить вещи к урокам.</p></div> : <div className="backpack-items">{backpack.map((item) => <label className="backpack-item" key={item.item_id}><input type="checkbox" checked={item.checked} disabled={backpackMeta.status !== 'packing' || Boolean(busyItemId)} onChange={() => void toggleItem(item)} /><span><strong>{item.item_text}</strong><small>{item.subject_titles.join(' · ')}</small></span></label>)}</div>}
+      {backpack.length === 0 ? <div className="child-cloud-state"><strong>Список вещей пуст</strong><p>Попроси родителя добавить вещи к урокам.</p></div> : <div className="backpack-items">{backpack.map((item) => <label className="backpack-item" key={item.item_id}><input type="checkbox" checked={item.checked} disabled={!online || backpackMeta.status !== 'packing' || Boolean(busyItemId)} onChange={() => void toggleItem(item)} /><span><strong>{item.item_text}</strong><small>{item.subject_titles.join(' · ')}</small></span></label>)}</div>}
       <div className="backpack-progress"><span>Собрано {progress.checked} из {progress.total}</span><progress max={Math.max(progress.total, 1)} value={progress.checked} /></div>
       {message && <p className={message.startsWith('Рюкзак отправлен') ? 'auth-message success' : 'auth-message error'} role={message.startsWith('Рюкзак отправлен') ? 'status' : 'alert'}>{message}</p>}
-      {backpackMeta.status === 'packing' && <button type="button" className="primary-button" disabled={submitting || progress.total === 0 || progress.checked !== progress.total} onClick={() => void submitBackpack()}>{submitting ? 'Отправляем…' : 'Рюкзак собран'}</button>}
+      {backpackMeta.status === 'packing' && <button type="button" className="primary-button" disabled={!online || submitting || progress.total === 0 || progress.checked !== progress.total} onClick={() => void submitBackpack()}>{submitting ? 'Отправляем…' : online ? 'Рюкзак собран' : 'Нужен интернет'}</button>}
       {backpackMeta.status === 'pending_review' && <p className="auth-message success" role="status">Рюкзак ждёт проверки родителя.</p>}
       {backpackMeta.status === 'approved' && <p className="auth-message success" role="status">Родитель подтвердил рюкзак. Звезда начислена!</p>}
     </section></div>}

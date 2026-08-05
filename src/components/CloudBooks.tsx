@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { bookStatusLabel, filterBooks, validateReadingDiary, type BookFilter, type CloudBook, type ReadingDiaryDraft } from '../domain/books'
 import { supabase } from '../lib/supabase'
+import { loadWithOfflineFallback, offlineKey, saveOfflineSnapshot } from '../lib/offlineCache'
 import { Icon } from './Icon'
+import { useChildSession } from './ChildSession'
+import { OfflineDataNote, useOnlineStatus } from './NetworkStatus'
 
 const filters: BookFilter[] = ['Все', 'Читаю', 'Прочитано']
 
@@ -16,6 +19,8 @@ function ReviewLabel({ book }: { book: CloudBook }) {
 }
 
 export function CloudBooks() {
+  const profile = useChildSession()
+  const online = useOnlineStatus()
   const [books, setBooks] = useState<CloudBook[]>([])
   const [filter, setFilter] = useState<BookFilter>('Все')
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -24,16 +29,17 @@ export function CloudBooks() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [formError, setFormError] = useState('')
+  const [cachedAt, setCachedAt] = useState<string | null>(null)
 
   async function loadBooks() {
-    if (!supabase) return
+    if (!supabase || !profile) return
     setState('loading')
-    const { data, error } = await supabase.rpc('get_my_books')
-    if (error) setState('error')
-    else { setBooks((data ?? []) as CloudBook[]); setState('ready') }
+    const result = await loadWithOfflineFallback<CloudBook[]>(offlineKey.books(profile.childId), () => supabase!.rpc('get_my_books'), online)
+    if (result.source === 'none') setState('error')
+    else { setBooks(result.data ?? []); setCachedAt(result.source === 'cache' ? result.savedAt : null); setState('ready') }
   }
 
-  useEffect(() => { void loadBooks() }, [])
+  useEffect(() => { void loadBooks() }, [online, profile])
 
   const visibleBooks = useMemo(() => filterBooks(books, filter), [books, filter])
   const currentBook = filter === 'Все' ? books.find((book) => book.status === 'reading') : undefined
@@ -48,7 +54,8 @@ export function CloudBooks() {
 
   async function saveDiary(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!supabase || !editingBook || !draft || saving) return
+    if (!supabase || !profile || !editingBook || !draft || saving) return
+    if (!online) { setFormError('Подключись к интернету, чтобы сохранить дневник.'); return }
     const validationError = validateReadingDiary(draft)
     if (validationError) { setFormError(validationError); return }
     setSaving(true)
@@ -65,7 +72,9 @@ export function CloudBooks() {
     if (error) setFormError('Не получилось сохранить дневник. Проверь интернет и попробуй ещё раз.')
     else {
       const result = data?.[0] as { status: CloudBook['status']; review_status: CloudBook['review_status'] } | undefined
-      setBooks((current) => current.map((book) => book.id === editingBook.id ? { ...book, status: result?.status ?? draft.status, review_status: result?.review_status ?? (draft.status === 'finished' ? 'pending_review' : 'not_submitted'), started_on: draft.startedOn || null, finished_on: draft.finishedOn || null, main_characters: draft.mainCharacters, summary: draft.summary, rating: draft.rating } : book))
+      const updated = books.map((book) => book.id === editingBook.id ? { ...book, status: result?.status ?? draft.status, review_status: result?.review_status ?? (draft.status === 'finished' ? 'pending_review' as const : 'not_submitted' as const), started_on: draft.startedOn || null, finished_on: draft.finishedOn || null, main_characters: draft.mainCharacters, summary: draft.summary, rating: draft.rating } : book)
+      setBooks(updated)
+      await saveOfflineSnapshot(offlineKey.books(profile.childId), updated)
       setMessage(draft.status === 'finished' ? 'Книга отправлена родителю на проверку.' : 'Дневник сохранён.')
       setEditingBook(null)
       setDraft(null)
@@ -79,9 +88,10 @@ export function CloudBooks() {
 
   return <section className="screen"><div className="screen-heading"><div><p className="eyebrow">Читательский дневник</p><h1>Книги</h1></div></div>
     <div className="filter-pills" aria-label="Показать книги">{filters.map((item) => <button type="button" key={item} className={filter === item ? 'selected' : ''} aria-pressed={filter === item} onClick={() => setFilter(item)}>{item}</button>)}</div>
+    {cachedAt && <OfflineDataNote savedAt={cachedAt} />}
     {message && <p className="auth-message success" role="status">{message}</p>}
     {state === 'loading' && <p className="child-cloud-state" role="status">Загружаем книги…</p>}
-    {state === 'error' && <div className="auth-message error" role="alert"><p>Не получилось загрузить книги. Проверь интернет и попробуй ещё раз.</p><button type="button" className="secondary-button" onClick={() => void loadBooks()}>Повторить</button></div>}
+    {state === 'error' && <div className="auth-message error" role="alert"><p>{online ? 'Не получилось загрузить книги. Попробуй ещё раз.' : 'Сохранённых книг на этом устройстве пока нет.'}</p><button type="button" className="secondary-button" onClick={() => void loadBooks()}>Повторить</button></div>}
     {state === 'ready' && visibleBooks.length === 0 && <div className="child-cloud-state"><strong>Здесь пока нет книг</strong><p>{filter === 'Все' ? 'Родитель добавит книгу для чтения.' : 'Книги с таким статусом появятся здесь.'}</p></div>}
     {currentBook && <article className="current-book"><div className="book-mark"><Icon name="books" /></div><p className="eyebrow">Сейчас читаю</p><h2>{currentBook.title}</h2><p>{currentBook.author}</p><button type="button" className="primary-button" onClick={() => openDiary(currentBook)}>Открыть дневник</button></article>}
     {state === 'ready' && listBooks.length > 0 && <div className="book-list">{listBooks.map((book) => <BookRow book={book} key={book.id} />)}</div>}
@@ -91,7 +101,7 @@ export function CloudBooks() {
       <label htmlFor="book-characters">Главные герои</label><textarea id="book-characters" maxLength={2000} value={draft.mainCharacters} onChange={(event) => setDraft((current) => current ? { ...current, mainCharacters: event.target.value } : current)} placeholder="Кто был в этой истории?" />
       <label htmlFor="book-summary">Краткое содержание</label><textarea id="book-summary" maxLength={6000} value={draft.summary} onChange={(event) => setDraft((current) => current ? { ...current, summary: event.target.value } : current)} placeholder="О чём эта книга?" />
       <fieldset className="rating-field"><legend>Моя оценка</legend><div>{[1, 2, 3, 4, 5].map((rating) => <button type="button" key={rating} className={draft.rating === rating ? 'selected' : ''} aria-pressed={draft.rating === rating} aria-label={`Оценка ${rating} из 5`} onClick={() => setDraft((current) => current ? { ...current, rating } : current)}>{rating}</button>)}</div></fieldset>
-      {formError && <p className="auth-message error" role="alert">{formError}</p>}<button type="submit" className="primary-button" disabled={saving}>{saving ? 'Сохраняем…' : draft.status === 'finished' ? 'Сохранить и отправить родителю' : 'Сохранить дневник'}</button>
+      {formError && <p className="auth-message error" role="alert">{formError}</p>}<button type="submit" className="primary-button" disabled={saving || !online}>{saving ? 'Сохраняем…' : !online ? 'Нужен интернет' : draft.status === 'finished' ? 'Сохранить и отправить родителю' : 'Сохранить дневник'}</button>
     </form></section></div>}
   </section>
 }
