@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
-import { parseThings, schoolYearDefaults, validateLessonDraft } from '../domain/schedule'
+import { parseThings, schoolYearDefaults, validateLessonDraft, validateOptionalTimeRange } from '../domain/schedule'
 import { supabase } from '../lib/supabase'
 
 type AcademicYear = { id: string; starts_on: string; ends_on: string }
@@ -73,6 +73,8 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
   const [cancellationDate, setCancellationDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [cancellationLessonId, setCancellationLessonId] = useState('')
   const [savingCancellation, setSavingCancellation] = useState(false)
+  const [exceptionKind, setExceptionKind] = useState<'cancelled' | 'replacement'>('cancelled')
+  const [replacementDraft, setReplacementDraft] = useState({ subject: '', startsAt: '', endsAt: '', things: '' })
 
   const loadYears = async () => {
     const client = supabase
@@ -260,26 +262,41 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
     setMessage('Урок удалён из недельного расписания.')
   }
 
-  async function cancelLessonForDate(event: FormEvent<HTMLFormElement>) {
+  async function saveLessonException(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!supabase || !cancellationDate || !cancellationLessonId) return
+    const timeError = exceptionKind === 'replacement' ? validateOptionalTimeRange(replacementDraft.startsAt, replacementDraft.endsAt) : null
+    if (timeError) { setError(timeError); return }
+    if (exceptionKind === 'replacement' && !replacementDraft.subject.trim()) { setError('Введите предмет для замены.'); return }
     setSavingCancellation(true)
     setError('')
     setMessage('')
+    let subjectId: string | null = null
+    try {
+      subjectId = exceptionKind === 'replacement' ? await findOrCreateSubject(replacementDraft.subject.trim()) : null
+    } catch {
+      setSavingCancellation(false)
+      setError('Не удалось подготовить замену. Проверьте интернет и попробуйте ещё раз.')
+      return
+    }
     const { error: cancellationError } = await supabase.from('lesson_exceptions').insert({
       family_id: familyId,
       day: cancellationDate,
       weekly_lesson_id: cancellationLessonId,
-      kind: 'cancelled',
+      kind: exceptionKind,
+      subject_id: subjectId,
+      starts_at: replacementDraft.startsAt || null,
+      ends_at: replacementDraft.endsAt || null,
+      things: exceptionKind === 'replacement' && replacementDraft.things.trim() ? parseThings(replacementDraft.things) : null,
     })
     setSavingCancellation(false)
     if (cancellationError) {
       setError(cancellationError.code === '23505'
-        ? 'Для этого урока на эту дату отмена уже сохранена.'
-        : 'Не удалось сохранить отмену. Проверьте интернет и попробуйте ещё раз.')
+        ? 'Для этого урока на эту дату изменение уже сохранено.'
+        : 'Не удалось сохранить изменение. Проверьте интернет и попробуйте ещё раз.')
       return
     }
-    setMessage('Отмена урока на выбранную дату сохранена.')
+    setMessage(exceptionKind === 'cancelled' ? 'Отмена урока на выбранную дату сохранена.' : 'Замена урока на выбранную дату сохранена.')
   }
 
   const selectedYear = years.find((year) => year.id === selectedYearId)
@@ -305,9 +322,9 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
         <LessonFields draft={lessonDraft} setDraft={setLessonDraft} />
         <button className="primary-button" type="submit" disabled={savingLesson}>{savingLesson ? 'Сохраняем…' : 'Добавить урок'}</button>
       </form>}
-      {selectedYear && lessons.length > 0 && <form className="parent-exception-form" onSubmit={cancelLessonForDate}>
-        <h3>Отменить урок на дату</h3>
-        <p>Недельное расписание не изменится: отмена подействует только в выбранный день.</p>
+      {selectedYear && lessons.length > 0 && <form className="parent-exception-form" onSubmit={saveLessonException}>
+        <h3>Изменить урок на дату</h3>
+        <p>Недельное расписание не изменится: это изменение подействует только в выбранный день.</p>
         <label htmlFor="cancellation-date">Дата</label>
         <input id="cancellation-date" type="date" value={cancellationDate} onChange={(event) => setCancellationDate(event.target.value)} required />
         <label htmlFor="cancellation-lesson">Урок</label>
@@ -315,7 +332,10 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
           <option value="" disabled>Выберите урок</option>
           {lessons.map((lesson) => <option value={lesson.id} key={lesson.id}>{weekdays.find((day) => day.value === lesson.weekday)?.label}: {lesson.lesson_order}. {subjectTitle(lesson)} · {localTime(lesson.starts_at)}</option>)}
         </select>
-        <button className="secondary-button" type="submit" disabled={savingCancellation || !cancellationLessonId}>{savingCancellation ? 'Сохраняем отмену…' : 'Отменить урок на дату'}</button>
+        <label htmlFor="exception-kind">Действие</label>
+        <select id="exception-kind" className="parent-select" value={exceptionKind} onChange={(event) => setExceptionKind(event.target.value as 'cancelled' | 'replacement')}><option value="cancelled">Отменить урок</option><option value="replacement">Заменить урок</option></select>
+        {exceptionKind === 'replacement' && <><label htmlFor="replacement-subject">Новый предмет</label><input id="replacement-subject" type="text" maxLength={80} value={replacementDraft.subject} onChange={(event) => setReplacementDraft((current) => ({ ...current, subject: event.target.value }))} placeholder="Например, Математика" required /><div className="parent-form-grid"><div><label htmlFor="replacement-start">Новое начало</label><input id="replacement-start" type="time" value={replacementDraft.startsAt} onChange={(event) => setReplacementDraft((current) => ({ ...current, startsAt: event.target.value }))} /></div><div><label htmlFor="replacement-end">Новое окончание</label><input id="replacement-end" type="time" value={replacementDraft.endsAt} onChange={(event) => setReplacementDraft((current) => ({ ...current, endsAt: event.target.value }))} /></div></div><label htmlFor="replacement-things">Что взять для замены</label><input id="replacement-things" type="text" value={replacementDraft.things} onChange={(event) => setReplacementDraft((current) => ({ ...current, things: event.target.value }))} placeholder="Можно оставить пустым" /></>}
+        <button className="secondary-button" type="submit" disabled={savingCancellation || !cancellationLessonId}>{savingCancellation ? 'Сохраняем…' : exceptionKind === 'cancelled' ? 'Отменить урок на дату' : 'Сохранить замену'}</button>
       </form>}
       <div className="parent-lessons" aria-live="polite">
         <h3>Сохранённые уроки</h3>

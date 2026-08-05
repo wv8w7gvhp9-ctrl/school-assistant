@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseThings, schoolYearDefaults, validateLessonDraft } from './schedule'
+import { parseThings, schoolYearDefaults, validateLessonDraft, validateOptionalTimeRange } from './schedule'
 
 describe('расписание', () => {
   it('объединяет повторяющиеся вещи и очищает пробелы', () => {
@@ -13,5 +13,9 @@ describe('расписание', () => {
 
   it('создаёт границы учебного года', () => {
     expect(schoolYearDefaults(new Date(2026, 7, 5))).toEqual({ startsOn: '2026-09-01', endsOn: '2027-05-31' })
+  })
+
+  it('требует обе границы времени для замены', () => {
+    expect(validateOptionalTimeRange('08:00', '')).toBe('Укажите и начало, и окончание замены.')
   })
 })

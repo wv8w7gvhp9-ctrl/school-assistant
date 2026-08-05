@@ -20,6 +20,12 @@ export function validateLessonDraft(draft: LessonDraft): string | null {
   return null
 }
 
+export function validateOptionalTimeRange(startsAt: string, endsAt: string): string | null {
+  if (Boolean(startsAt) !== Boolean(endsAt)) return 'Укажите и начало, и окончание замены.'
+  if (startsAt && endsAt && endsAt <= startsAt) return 'Время окончания должно быть позже времени начала.'
+  return null
+}
+
 export function schoolYearDefaults(now = new Date()): { startsOn: string; endsOn: string } {
   const startYear = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1
   return { startsOn: `${startYear}-09-01`, endsOn: `${startYear + 1}-05-31` }
