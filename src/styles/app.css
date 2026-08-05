@@ -56,3 +56,29 @@ p { color: var(--color-text-muted); font-size: 16px; line-height: 1.5; }
 @media (min-width: 375px) { .top-bar { padding-right: var(--space-5); padding-left: var(--space-5); }.content { padding-right: var(--space-5); padding-left: var(--space-5); }.bottom-nav { right: var(--space-4); left: var(--space-4); } }
 @media (max-width: 767px) { .top-bar { padding-top: max(var(--space-8), env(safe-area-inset-top)); } }
 @media (min-width: 768px) { .top-bar { width: min(100%, 760px); margin: 0 auto; }.content { width: min(100%, 760px); padding-top: var(--space-5); }.bottom-nav { position: sticky; width: min(100% - 48px, 720px); margin: 0 auto 24px; }.screen { gap: var(--space-8); } }
+
+/* Домашка: облачные детские состояния и родительский редактор. */
+.auth-form textarea { width: 100%; min-height: 112px; padding: var(--space-3); resize: vertical; border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); color: var(--color-text); background: var(--color-surface); }
+.parent-homework { display: grid; gap: var(--space-3); margin-top: var(--space-5); padding-top: var(--space-5); border-top: 1px solid var(--color-border); }
+.parent-homework-form { padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-subtle); }
+.parent-homework-list { display: grid; gap: var(--space-3); margin-top: var(--space-3); }
+.parent-homework-row { display: grid; gap: var(--space-2); padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-subtle); }
+.parent-homework-row.review { border-color: var(--color-accent-gold); background: var(--color-soft-apricot); }
+.parent-homework-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.parent-homework-heading strong { font-size: 18px; }
+.parent-homework-row > span { color: var(--color-text-muted); font-size: 14px; font-weight: 700; }
+.parent-review-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin-top: var(--space-2); }
+.success-button { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: var(--space-3); border: 1px solid var(--color-success); border-radius: var(--radius-md); color: var(--color-on-primary); background: var(--color-success); font-weight: 700; }
+.homework-card.homework-todo { background: var(--color-soft-blue); }
+.homework-card.homework-pending_review { background: var(--color-soft-blush); }
+.homework-card.homework-needs_revision { background: var(--color-soft-apricot); }
+.homework-card.homework-approved { background: var(--color-soft-aqua); }
+.homework-submit { margin-top: var(--space-4); border-color: var(--color-accent-blue); background: var(--color-accent-blue); }
+.approved-homework { display: grid; gap: var(--space-3); }
+.homework-progress { display: block; width: 100%; height: 16px; margin-top: var(--space-3); overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-pill); background: var(--color-surface); appearance: none; }
+.homework-progress::-webkit-progress-bar { background: var(--color-surface); }
+.homework-progress::-webkit-progress-value { border-radius: var(--radius-pill); background: var(--color-accent-gold); }
+.homework-progress::-moz-progress-bar { border-radius: var(--radius-pill); background: var(--color-accent-gold); }
+.auth-message.error p { color: var(--color-danger); }
+.auth-message .secondary-button { margin-top: var(--space-3); }
+@media (max-width: 480px) { .parent-review-actions, .parent-form-grid { grid-template-columns: 1fr; }.homework-meta, .parent-homework-heading { align-items: flex-start; flex-direction: column; } }

@@ -48,8 +48,8 @@
 * { box-sizing: border-box; }
 html { min-width: 320px; background: var(--color-canvas); }
 body { min-width: 320px; min-height: 100vh; margin: 0; background: var(--color-canvas); }
-button, input { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
-button:focus-visible, input:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 button:disabled { cursor: not-allowed; opacity: .58; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 1ms !important; animation-duration: 1ms !important; } }

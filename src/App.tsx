@@ -2,6 +2,7 @@ import { useState, type ReactElement } from 'react'
 import { AppShell } from './components/AppShell'
 import { AuthGate } from './components/AuthGate'
 import { CloudSchedule } from './components/CloudSchedule'
+import { CloudHomework } from './components/CloudHomework'
 import { useChildSession } from './components/ChildSession'
 import { Icon } from './components/Icon'
 import { SectionTitle, StarCounter, StatusChip } from './components/UI'
@@ -35,6 +36,11 @@ function Schedule() {
 }
 
 function Homework() {
+  const cloudProfile = useChildSession()
+  return cloudProfile ? <CloudHomework /> : <DemoHomework />
+}
+
+function DemoHomework() {
   const [filter, setFilter] = useState('Сегодня')
   const filtered = filter === 'Выполнено'
     ? homework.filter((item) => item.status === 'approved')
@@ -44,7 +50,7 @@ function Homework() {
   return <section className="screen"><div className="screen-heading"><div><p className="eyebrow">На сегодня и завтра</p><h1>Домашка</h1></div></div>
     <div className="filter-pills">{['Сегодня', 'На завтра', 'Выполнено'].map((item) => <button type="button" key={item} className={filter === item ? 'selected' : ''} onClick={() => setFilter(item)}>{item}</button>)}</div>
     <article className="progress-card"><div><span>Выполнено 1 из 4</span><strong>1/4</strong></div><div className="progress-track" aria-label="Выполнено 1 из 4"><span /></div></article>
-    <div className="homework-list">{filtered.map((item) => <article className="card homework-card" key={item.id}><div className="homework-meta"><span>{item.subject}</span><StatusChip status={item.status} /></div><h2>{item.task}</h2><p>{item.dueLabel}</p>{(item.status === 'todo' || item.status === 'needs_revision') && <button className="secondary-button" type="button" disabled>Задание выполнено</button>}</article>)}</div>
+    <div className="homework-list">{filtered.map((item) => <article className={`card homework-card homework-${item.status}`} key={item.id}><div className="homework-meta"><span>{item.subject}</span><StatusChip status={item.status} /></div><h2>{item.task}</h2><p>{item.dueLabel}</p>{(item.status === 'todo' || item.status === 'needs_revision') && <button className="secondary-button" type="button" disabled>Задание выполнено</button>}</article>)}</div>
     {filter !== 'Выполнено' && <><SectionTitle>Подтверждено</SectionTitle><article className="card compact-homework"><div><strong>{homework[3].subject}</strong><p>{homework[3].task}</p></div><StatusChip status="approved" /></article></>}
   </section>
 }
