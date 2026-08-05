@@ -28,3 +28,5 @@ export const supabase: SupabaseClient | null = config
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
     })
   : null
+
+export const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() || null
