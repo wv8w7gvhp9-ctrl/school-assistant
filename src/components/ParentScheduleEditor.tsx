@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 type AcademicYear = { id: string; starts_on: string; ends_on: string }
 type WeeklyLesson = {
   id: string
+  subject_id: string
   weekday: number
   lesson_order: number
   starts_at: string
@@ -12,6 +13,17 @@ type WeeklyLesson = {
   things: string[]
   subject: { title: string } | { title: string }[] | null
 }
+
+type EditorLessonDraft = {
+  subject: string
+  weekday: string
+  lessonOrder: string
+  startsAt: string
+  endsAt: string
+  things: string
+}
+
+const emptyLessonDraft: EditorLessonDraft = { subject: '', weekday: '1', lessonOrder: '1', startsAt: '08:30', endsAt: '09:15', things: '' }
 
 const weekdays = [
   { value: 1, label: 'Понедельник' },
@@ -40,7 +52,12 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [yearDraft, setYearDraft] = useState(defaults)
-  const [lessonDraft, setLessonDraft] = useState({ subject: '', weekday: '1', lessonOrder: '1', startsAt: '08:30', endsAt: '09:15', things: '' })
+  const [lessonDraft, setLessonDraft] = useState<EditorLessonDraft>(emptyLessonDraft)
+  const [editingLessonId, setEditingLessonId] = useState<string | null>(null)
+  const [originalEditDraft, setOriginalEditDraft] = useState<EditorLessonDraft | null>(null)
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const [lessonPendingDeletion, setLessonPendingDeletion] = useState<WeeklyLesson | null>(null)
+  const [deletingLesson, setDeletingLesson] = useState(false)
 
   const loadYears = async () => {
     const client = supabase
@@ -65,7 +82,7 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
     }
     const { data, error: requestError } = await client
       .from('weekly_lessons')
-      .select('id, weekday, lesson_order, starts_at, ends_at, things, subject:subjects(title)')
+      .select('id, subject_id, weekday, lesson_order, starts_at, ends_at, things, subject:subjects(title)')
       .eq('family_id', familyId)
       .eq('academic_year_id', yearId)
       .order('weekday')
@@ -148,30 +165,84 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
     try {
       const title = lessonDraft.subject.trim()
       const subjectId = await findOrCreateSubject(title)
-      const { error: insertError } = await supabase.from('weekly_lessons').insert({
-        family_id: familyId,
-        academic_year_id: selectedYearId,
+      const payload = {
         subject_id: subjectId,
         weekday: Number(lessonDraft.weekday),
         lesson_order: Number(lessonDraft.lessonOrder),
         starts_at: lessonDraft.startsAt,
         ends_at: lessonDraft.endsAt,
         things: parseThings(lessonDraft.things),
-      })
-      if (insertError) {
-        setError(insertError.code === '23505'
+      }
+      const request = editingLessonId
+        ? supabase.from('weekly_lessons').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editingLessonId).eq('family_id', familyId)
+        : supabase.from('weekly_lessons').insert({ ...payload, family_id: familyId, academic_year_id: selectedYearId })
+      const { error: saveError } = await request
+      if (saveError) {
+        setError(saveError.code === '23505'
           ? 'В этот день уже есть урок с таким порядковым номером.'
           : 'Не удалось сохранить урок. Проверьте интернет и попробуйте ещё раз.')
         return
       }
       await loadLessons(selectedYearId)
-      setLessonDraft((current) => ({ ...current, subject: '', lessonOrder: String(Number(current.lessonOrder) + 1), things: '' }))
-      setMessage('Урок сохранён в недельном расписании.')
+      const wasEditing = Boolean(editingLessonId)
+      setEditingLessonId(null)
+      setOriginalEditDraft(null)
+      setLessonDraft(wasEditing ? emptyLessonDraft : { ...lessonDraft, subject: '', lessonOrder: String(Number(lessonDraft.lessonOrder) + 1), things: '' })
+      setMessage(wasEditing ? 'Изменения урока сохранены.' : 'Урок сохранён в недельном расписании.')
     } catch {
       setError('Не удалось сохранить урок. Проверьте интернет и попробуйте ещё раз.')
     } finally {
       setSavingLesson(false)
     }
+  }
+
+  function beginEditing(lesson: WeeklyLesson) {
+    const draft: EditorLessonDraft = {
+      subject: subjectTitle(lesson),
+      weekday: String(lesson.weekday),
+      lessonOrder: String(lesson.lesson_order),
+      startsAt: localTime(lesson.starts_at),
+      endsAt: localTime(lesson.ends_at),
+      things: lesson.things.join(', '),
+    }
+    setEditingLessonId(lesson.id)
+    setOriginalEditDraft(draft)
+    setLessonDraft(draft)
+    setLessonPendingDeletion(null)
+    setConfirmDiscard(false)
+    setError('')
+    setMessage('')
+  }
+
+  function finishEditing() {
+    setEditingLessonId(null)
+    setOriginalEditDraft(null)
+    setConfirmDiscard(false)
+    setLessonDraft(emptyLessonDraft)
+  }
+
+  function requestCancelEditing() {
+    if (editingLessonId && originalEditDraft && JSON.stringify(originalEditDraft) !== JSON.stringify(lessonDraft)) {
+      setConfirmDiscard(true)
+      return
+    }
+    finishEditing()
+  }
+
+  async function deleteLesson() {
+    if (!supabase || !lessonPendingDeletion || !selectedYearId) return
+    setDeletingLesson(true)
+    setError('')
+    const { error: deleteError } = await supabase.from('weekly_lessons').delete().eq('id', lessonPendingDeletion.id).eq('family_id', familyId)
+    setDeletingLesson(false)
+    if (deleteError) {
+      setError('Не удалось удалить урок. Проверьте интернет и попробуйте ещё раз.')
+      return
+    }
+    if (editingLessonId === lessonPendingDeletion.id) finishEditing()
+    setLessonPendingDeletion(null)
+    await loadLessons(selectedYearId)
+    setMessage('Урок удалён из недельного расписания.')
   }
 
   const selectedYear = years.find((year) => year.id === selectedYearId)
@@ -189,11 +260,11 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
     </form>}
     {!loading && years.length > 0 && <>
       <label className="parent-select-label" htmlFor="academic-year">Учебный год</label>
-      <select id="academic-year" className="parent-select" value={selectedYearId} onChange={(event) => { setSelectedYearId(event.target.value); setError(''); setMessage('') }}>
+      <select id="academic-year" className="parent-select" value={selectedYearId} disabled={Boolean(editingLessonId)} onChange={(event) => { setSelectedYearId(event.target.value); setError(''); setMessage('') }}>
         {years.map((year) => <option value={year.id} key={year.id}>{year.starts_on} — {year.ends_on}</option>)}
       </select>
       {selectedYear && <form className="auth-form" onSubmit={createLesson}>
-        <h3>Добавить урок</h3>
+        <h3>{editingLessonId ? 'Изменить урок' : 'Добавить урок'}</h3>
         <label htmlFor="lesson-subject">Предмет</label>
         <input id="lesson-subject" type="text" maxLength={80} value={lessonDraft.subject} onChange={(event) => setLessonDraft((current) => ({ ...current, subject: event.target.value }))} placeholder="Например, Математика" required />
         <div className="parent-form-grid"><div><label htmlFor="lesson-weekday">День</label><select id="lesson-weekday" className="parent-select" value={lessonDraft.weekday} onChange={(event) => setLessonDraft((current) => ({ ...current, weekday: event.target.value }))}>{weekdays.map((day) => <option value={day.value} key={day.value}>{day.label}</option>)}</select></div><div><label htmlFor="lesson-order">Номер урока</label><input id="lesson-order" type="number" min="1" inputMode="numeric" value={lessonDraft.lessonOrder} onChange={(event) => setLessonDraft((current) => ({ ...current, lessonOrder: event.target.value }))} required /></div></div>
@@ -201,14 +272,17 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
         <label htmlFor="lesson-things">Что взять с собой</label>
         <input id="lesson-things" type="text" value={lessonDraft.things} onChange={(event) => setLessonDraft((current) => ({ ...current, things: event.target.value }))} placeholder="Тетрадь, учебник, ручка" />
         <p className="field-help">Перечислите вещи через запятую. Повторы будут объединены.</p>
-        <button className="primary-button" type="submit" disabled={savingLesson}>{savingLesson ? 'Сохраняем…' : 'Добавить урок'}</button>
+        <button className="primary-button" type="submit" disabled={savingLesson}>{savingLesson ? 'Сохраняем…' : editingLessonId ? 'Сохранить изменения' : 'Добавить урок'}</button>
+        {editingLessonId && <button className="secondary-button" type="button" onClick={requestCancelEditing} disabled={savingLesson}>Отменить изменения</button>}
       </form>}
+      {confirmDiscard && <section className="parent-confirm" role="alert"><strong>Не сохранять изменения?</strong><p>Изменения этого урока будут потеряны.</p><div><button className="secondary-button" type="button" onClick={() => setConfirmDiscard(false)}>Продолжить редактирование</button><button className="danger-button" type="button" onClick={finishEditing}>Не сохранять</button></div></section>}
+      {lessonPendingDeletion && <section className="parent-confirm" role="alert"><strong>Удалить урок «{subjectTitle(lessonPendingDeletion)}»?</strong><p>Будет удалён только этот повторяющийся урок. Остальные уроки и предмет останутся.</p><div><button className="secondary-button" type="button" onClick={() => setLessonPendingDeletion(null)} disabled={deletingLesson}>Отмена</button><button className="danger-button" type="button" onClick={deleteLesson} disabled={deletingLesson}>{deletingLesson ? 'Удаляем…' : 'Удалить урок'}</button></div></section>}
       <div className="parent-lessons" aria-live="polite">
         <h3>Сохранённые уроки</h3>
         {lessons.length === 0 ? <p className="parent-empty">В этом учебном году уроков ещё нет.</p> : weekdays.map((day) => {
           const dayLessons = lessons.filter((lesson) => lesson.weekday === day.value)
           if (dayLessons.length === 0) return null
-          return <section className="parent-day" key={day.value}><h4>{day.label}</h4>{dayLessons.map((lesson) => <article className="parent-lesson-row" key={lesson.id}><strong>{lesson.lesson_order}. {subjectTitle(lesson)}</strong><span>{localTime(lesson.starts_at)}–{localTime(lesson.ends_at)}</span>{lesson.things.length > 0 && <p>Взять: {lesson.things.join(', ')}</p>}</article>)}</section>
+          return <section className="parent-day" key={day.value}><h4>{day.label}</h4>{dayLessons.map((lesson) => <article className="parent-lesson-row" key={lesson.id}><strong>{lesson.lesson_order}. {subjectTitle(lesson)}</strong><span>{localTime(lesson.starts_at)}–{localTime(lesson.ends_at)}</span>{lesson.things.length > 0 && <p>Взять: {lesson.things.join(', ')}</p>}<div className="parent-lesson-actions"><button type="button" onClick={() => beginEditing(lesson)} disabled={Boolean(editingLessonId) && editingLessonId !== lesson.id}>Изменить</button><button type="button" onClick={() => { setLessonPendingDeletion(lesson); setConfirmDiscard(false) }} disabled={deletingLesson}>Удалить</button></div></article>)}</section>
         })}
       </div>
     </>}
