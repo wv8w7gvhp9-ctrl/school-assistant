@@ -1,6 +1,8 @@
 import { useState, type ReactElement } from 'react'
 import { AppShell } from './components/AppShell'
 import { AuthGate } from './components/AuthGate'
+import { CloudSchedule } from './components/CloudSchedule'
+import { useChildSession } from './components/ChildSession'
 import { Icon } from './components/Icon'
 import { SectionTitle, StarCounter, StatusChip } from './components/UI'
 import { books, child, clubs, homework, todayLessons } from './data/demo'
@@ -9,7 +11,8 @@ import type { ChildTab } from './domain/types'
 const weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт']
 
 function Today() {
-  return <section className="screen"><div className="screen-heading"><div><p className="eyebrow">Понедельник, 3 августа</p><h1>Привет, {child.name}!</h1></div><StarCounter value={child.stars} /></div>
+  const cloudProfile = useChildSession()
+  return <section className="screen"><div className="screen-heading"><div><p className="eyebrow">Понедельник, 3 августа</p><h1>Привет, {cloudProfile?.childName ?? child.name}!</h1></div><StarCounter value={child.stars} /></div>
     <article className="hero-card"><div><p className="eyebrow">Ближайшее событие</p><h2>Первый урок в 09:00</h2><p>Математика · Сегодня всё получится</p></div><div className="hero-icon" aria-hidden="true"><Icon name="sun" /></div></article>
     <SectionTitle action="Все">Уроки сегодня</SectionTitle>
     <div className="card lesson-list">{todayLessons.map((lesson) => <div className="lesson-row" key={lesson.time}><time>{lesson.time}</time><span className={`subject-dot ${lesson.title === 'Русский язык' ? 'russian' : lesson.title === 'Чтение' ? 'reading' : 'math'}`} /><div><strong>{lesson.title}</strong><p>{lesson.things.join(' · ')}</p></div></div>)}</div>
@@ -21,6 +24,8 @@ function Today() {
 }
 
 function Schedule() {
+  const cloudProfile = useChildSession()
+  if (cloudProfile) return <CloudSchedule />
   const [day, setDay] = useState('Вт')
   return <section className="screen"><div className="screen-heading"><div><p className="eyebrow">Неделя 3–7 августа</p><h1>Расписание</h1></div></div>
     <div className="day-picker" aria-label="Выберите день">{weekdays.map((item) => <button type="button" onClick={() => setDay(item)} className={item === day ? 'selected' : ''} key={item}>{item}<span>{item === 'Вт' ? '4' : item === 'Пн' ? '3' : item === 'Ср' ? '5' : item === 'Чт' ? '6' : '7'}</span></button>)}</div>

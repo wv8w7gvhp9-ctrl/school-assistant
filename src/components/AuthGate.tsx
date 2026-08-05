@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import type { Session } from '@supabase/supabase-js'
 import { supabase, turnstileSiteKey } from '../lib/supabase'
 import { ParentScheduleEditor } from './ParentScheduleEditor'
+import { ChildSessionProvider } from './ChildSession'
 import { Turnstile } from './Turnstile'
 
 type AuthState = 'idle' | 'sending' | 'sent' | 'error'
@@ -90,8 +91,8 @@ function ChildConnect({ onBack, onLinkStart }: { onBack: () => void; onLinkStart
   return <main className="auth-page"><section className="auth-card"><p className="eyebrow">Для ребёнка</p><h1>Подключить устройство</h1><p>Попроси родителя показать короткий код. Почта и пароль не нужны.</p>{turnstileSiteKey ? <form className="auth-form" onSubmit={connect}><label htmlFor="child-code">Код подключения</label><input id="child-code" name="child-code" type="text" inputMode="text" autoComplete="one-time-code" maxLength={14} value={code} onChange={(event) => { setCode(event.target.value.toUpperCase()); setMessage('') }} placeholder="ABCD-EFGH-IJKL" required /><Turnstile siteKey={turnstileSiteKey} onToken={onToken} onError={onCaptchaError} /><button className="primary-button" type="submit" disabled={state === 'connecting' || !captchaToken}>{state === 'connecting' ? 'Подключаем…' : 'Подключить устройство'}</button></form> : <p className="auth-message error" role="alert">Защита подключения ещё не настроена. Попросите родителя завершить настройку.</p>}{message && <p className="auth-message error" role="alert">{message}</p>}<button type="button" className="text-button auth-back" onClick={onBack}>Я родитель</button></section></main>
 }
 
-function ChildSignedIn({ waitForLink, onLinkResolved }: { waitForLink: boolean; onLinkResolved: () => void }) {
-  const [name, setName] = useState<string | null>(null)
+function ChildSignedIn({ waitForLink, onLinkResolved, children }: { waitForLink: boolean; onLinkResolved: () => void; children: ReactNode }) {
+  const [profile, setProfile] = useState<{ childId: string; childName: string } | null>(null)
   const [error, setError] = useState('')
   useEffect(() => {
     const client = supabase
@@ -102,7 +103,8 @@ function ChildSignedIn({ waitForLink, onLinkResolved }: { waitForLink: boolean; 
       const { data, error: profileError } = await client.rpc('get_my_child_profile')
       if (cancelled) return
       if (!profileError && data?.[0]) {
-        setName((data[0] as { child_name: string }).child_name)
+        const child = data[0] as { child_id: string; child_name: string }
+        setProfile({ childId: child.child_id, childName: child.child_name })
         onLinkResolved()
         return
       }
@@ -116,7 +118,8 @@ function ChildSignedIn({ waitForLink, onLinkResolved }: { waitForLink: boolean; 
     void loadProfile()
     return () => { cancelled = true }
   }, [onLinkResolved, waitForLink])
-  return <main className="auth-page"><section className="auth-card"><p className="eyebrow">Устройство ребёнка</p><h1>{name ? `Готово, ${name}!` : 'Подключаем устройство…'}</h1>{name ? <p>Устройство безопасно подключено к семейному профилю. Расписание, домашка и книги появятся здесь после переноса данных в облако.</p> : error ? <p className="auth-message error" role="alert">{error}</p> : <p className="auth-loading">Проверяем код…</p>}</section></main>
+  if (profile) return <ChildSessionProvider profile={profile}>{children}</ChildSessionProvider>
+  return <main className="auth-page"><section className="auth-card"><p className="eyebrow">Устройство ребёнка</p><h1>Подключаем устройство…</h1>{error ? <p className="auth-message error" role="alert">{error}</p> : <p className="auth-loading">Проверяем код…</p>}</section></main>
 }
 
 export function AuthGate({ children }: { children: ReactNode }) {
@@ -151,7 +154,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (!supabase) return <MissingConfiguration>{children}</MissingConfiguration>
   if (loading) return <main className="auth-page"><p className="auth-loading">Проверяем безопасную сессию…</p></main>
-  if (session?.user.is_anonymous) return <ChildSignedIn waitForLink={childLinkPending} onLinkResolved={handleChildLinkResolved} />
+  if (session?.user.is_anonymous) return <ChildSignedIn waitForLink={childLinkPending} onLinkResolved={handleChildLinkResolved}>{children}</ChildSignedIn>
   if (session) return <ParentSignedIn session={session} />
 
   if (screen === 'child') return <ChildConnect onBack={() => setScreen('parent')} onLinkStart={() => setChildLinkPending(true)} />
