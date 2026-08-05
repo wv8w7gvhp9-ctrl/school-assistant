@@ -3,6 +3,7 @@ import { AppShell } from './components/AppShell'
 import { AuthGate } from './components/AuthGate'
 import { CloudSchedule } from './components/CloudSchedule'
 import { CloudHomework } from './components/CloudHomework'
+import { CloudBooks } from './components/CloudBooks'
 import { useChildSession } from './components/ChildSession'
 import { Icon } from './components/Icon'
 import { SectionTitle, StarCounter, StatusChip } from './components/UI'
@@ -56,6 +57,11 @@ function DemoHomework() {
 }
 
 function Books() {
+  const cloudProfile = useChildSession()
+  return cloudProfile ? <CloudBooks /> : <DemoBooks />
+}
+
+function DemoBooks() {
   const [filter, setFilter] = useState('Все')
   return <section className="screen"><div className="screen-heading"><div><p className="eyebrow">Читательский дневник</p><h1>Книги</h1></div></div>
     <div className="filter-pills">{['Все', 'Читаю', 'Прочитано'].map((item) => <button type="button" key={item} className={filter === item ? 'selected' : ''} onClick={() => setFilter(item)}>{item}</button>)}</div>

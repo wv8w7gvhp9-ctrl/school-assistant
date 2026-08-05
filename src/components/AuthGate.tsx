@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase, turnstileSiteKey } from '../lib/supabase'
 import { ParentScheduleEditor } from './ParentScheduleEditor'
 import { ParentHomeworkEditor } from './ParentHomeworkEditor'
+import { ParentBooksEditor } from './ParentBooksEditor'
 import { ChildSessionProvider } from './ChildSession'
 import { Turnstile } from './Turnstile'
 
@@ -68,6 +69,7 @@ function ParentSignedIn({ session }: { session: Session }) {
     {family && <div className="family-success" role="status"><strong>Семья создана</strong><p>Профиль ребёнка: {family.child_name}.</p></div>}
     {family && <ParentScheduleEditor familyId={family.family_id} />}
     {family && <ParentHomeworkEditor familyId={family.family_id} childId={family.child_id} />}
+    {family && <ParentBooksEditor familyId={family.family_id} childId={family.child_id} />}
     {family && <section className="link-code-panel"><h2>Подключить устройство ребёнка</h2><p>Откройте приложение на устройстве ребёнка, выберите «Подключить устройство ребёнка» и введите этот код.</p>{linkCode ? <div className="link-code" role="status"><strong>{linkCode.display_code}</strong><span>Код действует 15 минут и сработает только один раз.</span></div> : <button type="button" className="primary-button" onClick={createLinkCode} disabled={creatingCode}>{creatingCode ? 'Создаём код…' : 'Получить код подключения'}</button>}</section>}
     {familyError && <p className="auth-message error" role="alert">{familyError}</p>}
     <button type="button" className="secondary-button auth-button" onClick={signOut} disabled={signingOut}>{signingOut ? 'Выходим…' : 'Выйти'}</button>

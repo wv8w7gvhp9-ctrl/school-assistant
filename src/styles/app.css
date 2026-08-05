@@ -82,3 +82,29 @@ p { color: var(--color-text-muted); font-size: 16px; line-height: 1.5; }
 .auth-message.error p { color: var(--color-danger); }
 .auth-message .secondary-button { margin-top: var(--space-3); }
 @media (max-width: 480px) { .parent-review-actions, .parent-form-grid { grid-template-columns: 1fr; }.homework-meta, .parent-homework-heading { align-items: flex-start; flex-direction: column; } }
+
+/* Книги и читательский дневник. */
+.parent-books { display: grid; gap: var(--space-3); margin-top: var(--space-5); padding-top: var(--space-5); border-top: 1px solid var(--color-border); }
+.parent-book-form { padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-subtle); }
+.parent-book-list { display: grid; gap: var(--space-3); margin-top: var(--space-3); }
+.parent-book-row { display: grid; gap: var(--space-2); padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-subtle); }
+.parent-book-row.review { border-color: var(--color-accent-gold); background: var(--color-soft-apricot); }
+.parent-book-row > span { color: var(--color-text-muted); font-size: 14px; font-weight: 700; }
+.cloud-book-card { align-items: flex-start; }
+.cloud-book-copy { min-width: 0; flex: 1; }
+.cloud-book-copy h2, .cloud-book-copy p { overflow-wrap: anywhere; }
+.book-card .text-button { min-height: 48px; padding: var(--space-2); }
+.book-review { display: block; width: fit-content; margin-top: var(--space-2); padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill); font-size: 12px; font-weight: 700; }
+.book-review.pending { color: var(--color-warning); background: var(--color-warning-soft); }
+.book-review.approved { color: var(--color-success); background: var(--color-success-soft); }
+.sheet-backdrop { position: fixed; z-index: 4; inset: 0; display: grid; align-items: end; padding-top: var(--space-8); background: rgb(7 28 66 / 30%); }
+.reading-diary-sheet { width: min(100%, 680px); max-height: 92dvh; margin: 0 auto; padding: var(--space-5) var(--space-5) calc(var(--space-6) + env(safe-area-inset-bottom)); overflow-y: auto; border: 1px solid var(--color-border); border-radius: var(--radius-xl) var(--radius-xl) 0 0; background: var(--color-surface); box-shadow: var(--shadow-raised); }
+.sheet-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.sheet-close { width: 48px; height: 48px; flex: 0 0 auto; border: 1px solid var(--color-border); border-radius: var(--radius-pill); color: var(--color-primary); background: var(--color-surface-subtle); font-size: 28px; line-height: 1; }
+.rating-field { margin: 0; padding: 0; border: 0; }
+.rating-field legend { margin-bottom: var(--space-2); color: var(--color-text); font-weight: 700; }
+.rating-field > div { display: grid; grid-template-columns: repeat(5, minmax(48px, 1fr)); gap: var(--space-2); }
+.rating-field button { min-height: 48px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); color: var(--color-text); background: var(--color-surface); font-weight: 700; }
+.rating-field button.selected { border-color: var(--color-accent-gold); background: var(--color-soft-apricot); }
+@media (min-width: 768px) { .sheet-backdrop { align-items: center; padding: var(--space-6); }.reading-diary-sheet { max-height: 88dvh; border-radius: var(--radius-xl); } }
+@media (max-width: 374px) { .cloud-book-card { display: grid; grid-template-columns: auto minmax(0, 1fr); }.cloud-book-card .text-button { grid-column: 1 / -1; min-height: 48px; justify-content: center; }.rating-field > div { grid-template-columns: repeat(5, minmax(44px, 1fr)); gap: var(--space-1); } }
