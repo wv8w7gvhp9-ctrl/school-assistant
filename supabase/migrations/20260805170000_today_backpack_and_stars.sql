@@ -94,7 +94,8 @@ begin
 
   insert into public.backpack_checklists as saved (family_id, child_id, target_day)
   values (session_family_id, session_child_id, chosen_day)
-  on conflict (child_id, target_day) do update set updated_at = saved.updated_at
+  on conflict on constraint backpack_checklists_child_id_target_day_key
+  do update set updated_at = saved.updated_at
   returning saved.id, saved.status into saved_checklist_id, saved_status;
 
   if saved_status <> 'approved' then
@@ -111,8 +112,8 @@ begin
     insert into public.backpack_items (checklist_id, family_id, item_key, item_text, subject_titles)
     select saved_checklist_id, session_family_id, desired.item_key, desired.item_text, desired.subject_titles
     from grouped_items desired
-    on conflict (checklist_id, item_key) do update
-    set item_text = excluded.item_text, subject_titles = excluded.subject_titles;
+    on conflict on constraint backpack_items_checklist_id_item_key_key
+    do update set item_text = excluded.item_text, subject_titles = excluded.subject_titles;
 
     delete from public.backpack_items stored
     where stored.checklist_id = saved_checklist_id

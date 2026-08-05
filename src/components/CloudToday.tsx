@@ -20,6 +20,7 @@ export function CloudToday() {
   const [backpackMeta, setBackpackMeta] = useState<{ id: string; day: string; status: BackpackStatus } | null>(null)
   const [stars, setStars] = useState(0)
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [backpackError, setBackpackError] = useState(false)
   const [backpackOpen, setBackpackOpen] = useState(false)
   const [busyItemId, setBusyItemId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -35,7 +36,7 @@ export function CloudToday() {
       supabase.rpc('get_my_backpack'),
       supabase.rpc('get_my_star_count'),
     ])
-    const requestError = lessonResult.error ?? homeworkResult.error ?? clubResult.error ?? backpackResult.error ?? starResult.error
+    const requestError = lessonResult.error ?? homeworkResult.error ?? clubResult.error
     if (requestError) {
       console.error('Не удалось загрузить экран «Сегодня»', requestError)
       setState('error')
@@ -44,11 +45,20 @@ export function CloudToday() {
     setLessons((lessonResult.data ?? []) as CloudLesson[])
     setHomework((homeworkResult.data ?? []) as CloudHomeworkAssignment[])
     setClubs((clubResult.data ?? []) as ClubOccurrence[])
-    const backpackRows = (backpackResult.data ?? []) as BackpackResponseRow[]
-    const firstBackpackRow = backpackRows[0]
-    setBackpack(backpackRows.filter((row) => row.item_id && row.item_text).map((row) => ({ checklist_id: row.checklist_id, target_day: row.target_day, status: row.status, item_id: row.item_id!, item_text: row.item_text!, subject_titles: row.subject_titles ?? [], checked: Boolean(row.checked) })))
-    setBackpackMeta(firstBackpackRow ? { id: firstBackpackRow.checklist_id, day: firstBackpackRow.target_day, status: firstBackpackRow.status } : null)
-    setStars(Number(starResult.data ?? 0))
+    if (backpackResult.error) {
+      console.error('Не удалось подготовить рюкзак', backpackResult.error)
+      setBackpackError(true)
+      setBackpack([])
+      setBackpackMeta(null)
+    } else {
+      const backpackRows = (backpackResult.data ?? []) as BackpackResponseRow[]
+      const firstBackpackRow = backpackRows[0]
+      setBackpack(backpackRows.filter((row) => row.item_id && row.item_text).map((row) => ({ checklist_id: row.checklist_id, target_day: row.target_day, status: row.status, item_id: row.item_id!, item_text: row.item_text!, subject_titles: row.subject_titles ?? [], checked: Boolean(row.checked) })))
+      setBackpackMeta(firstBackpackRow ? { id: firstBackpackRow.checklist_id, day: firstBackpackRow.target_day, status: firstBackpackRow.status } : null)
+      setBackpackError(false)
+    }
+    if (starResult.error) console.error('Не удалось загрузить число звёзд', starResult.error)
+    setStars(starResult.error ? 0 : Number(starResult.data ?? 0))
     setState('ready')
   }
 
@@ -101,7 +111,7 @@ export function CloudToday() {
       <SectionTitle>Домашка</SectionTitle>
       {todayHomework.length === 0 ? <div className="child-cloud-state compact"><strong>Всё сделано</strong><p>На сегодня нет заданий, которые нужно выполнить.</p></div> : <div className="today-homework-list">{todayHomework.slice(0, 3).map((assignment) => <article className="card today-homework" key={assignment.id}><div><strong>{assignment.subject_title}</strong><p>{assignment.task}</p></div><StatusChip status={assignment.status} /></article>)}</div>}
       <button className="primary-button backpack-open-button" type="button" onClick={() => setBackpackOpen(true)} disabled={!backpackMeta}><Icon name="backpack" />{backpackMeta?.status === 'approved' ? 'Рюкзак подтверждён' : backpackMeta?.status === 'pending_review' ? 'Рюкзак ждёт проверки' : 'Собрать рюкзак'}</button>
-      {!backpackMeta && <p className="screen-note">Ближайший учебный день пока не найден.</p>}
+      {backpackError ? <div className="auth-message error" role="alert"><p>Не получилось подготовить рюкзак. Остальные данные дня доступны.</p><button type="button" className="secondary-button" onClick={() => void loadToday()}>Повторить</button></div> : !backpackMeta && <p className="screen-note">Ближайший учебный день пока не найден.</p>}
     </>}
     {backpackOpen && backpackMeta && <div className="sheet-backdrop"><section className="backpack-sheet" role="dialog" aria-modal="true" aria-labelledby="backpack-title"><div className="sheet-heading"><div><p className="eyebrow">На {formatFullRussianDate(backpackMeta.day).toLowerCase()}</p><h2 id="backpack-title">Собрать рюкзак</h2></div><button type="button" className="sheet-close" aria-label="Закрыть рюкзак" onClick={() => setBackpackOpen(false)}>×</button></div>
       {backpack.length === 0 ? <div className="child-cloud-state"><strong>Список вещей пуст</strong><p>Попроси родителя добавить вещи к урокам.</p></div> : <div className="backpack-items">{backpack.map((item) => <label className="backpack-item" key={item.item_id}><input type="checkbox" checked={item.checked} disabled={backpackMeta.status !== 'packing' || Boolean(busyItemId)} onChange={() => void toggleItem(item)} /><span><strong>{item.item_text}</strong><small>{item.subject_titles.join(' · ')}</small></span></label>)}</div>}
