@@ -1,5 +1,6 @@
 import { useState, type ReactElement } from 'react'
 import { AppShell } from './components/AppShell'
+import { AuthGate } from './components/AuthGate'
 import { Icon } from './components/Icon'
 import { SectionTitle, StarCounter, StatusChip } from './components/UI'
 import { books, child, clubs, homework, todayLessons } from './data/demo'
@@ -64,5 +65,5 @@ const screens: Record<ChildTab, () => ReactElement> = { today: Today, schedule: 
 export function App() {
   const [activeTab, setActiveTab] = useState<ChildTab>('today')
   const Screen = screens[activeTab]
-  return <AppShell activeTab={activeTab} onTabChange={setActiveTab}><Screen /></AppShell>
+  return <AuthGate><AppShell activeTab={activeTab} onTabChange={setActiveTab}><Screen /></AppShell></AuthGate>
 }
