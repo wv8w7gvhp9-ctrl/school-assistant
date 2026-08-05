@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
 import { parseThings, schoolYearDefaults, validateLessonDraft } from '../domain/schedule'
 import { supabase } from '../lib/supabase'
 
@@ -39,6 +39,18 @@ function subjectTitle(lesson: WeeklyLesson) {
 
 function localTime(value: string) {
   return value.slice(0, 5)
+}
+
+function LessonFields({ draft, setDraft }: { draft: EditorLessonDraft; setDraft: Dispatch<SetStateAction<EditorLessonDraft>> }) {
+  return <>
+    <label htmlFor="lesson-subject">Предмет</label>
+    <input id="lesson-subject" type="text" maxLength={80} value={draft.subject} onChange={(event) => setDraft((current) => ({ ...current, subject: event.target.value }))} placeholder="Например, Математика" required />
+    <div className="parent-form-grid"><div><label htmlFor="lesson-weekday">День</label><select id="lesson-weekday" className="parent-select" value={draft.weekday} onChange={(event) => setDraft((current) => ({ ...current, weekday: event.target.value }))}>{weekdays.map((day) => <option value={day.value} key={day.value}>{day.label}</option>)}</select></div><div><label htmlFor="lesson-order">Номер урока</label><input id="lesson-order" type="number" min="1" inputMode="numeric" value={draft.lessonOrder} onChange={(event) => setDraft((current) => ({ ...current, lessonOrder: event.target.value }))} required /></div></div>
+    <div className="parent-form-grid"><div><label htmlFor="lesson-start">Начало</label><input id="lesson-start" type="time" value={draft.startsAt} onChange={(event) => setDraft((current) => ({ ...current, startsAt: event.target.value }))} required /></div><div><label htmlFor="lesson-end">Окончание</label><input id="lesson-end" type="time" value={draft.endsAt} onChange={(event) => setDraft((current) => ({ ...current, endsAt: event.target.value }))} required /></div></div>
+    <label htmlFor="lesson-things">Что взять с собой</label>
+    <input id="lesson-things" type="text" value={draft.things} onChange={(event) => setDraft((current) => ({ ...current, things: event.target.value }))} placeholder="Тетрадь, учебник, ручка" />
+    <p className="field-help">Перечислите вещи через запятую. Повторы будут объединены.</p>
+  </>
 }
 
 export function ParentScheduleEditor({ familyId }: { familyId: string }) {
@@ -263,26 +275,17 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
       <select id="academic-year" className="parent-select" value={selectedYearId} disabled={Boolean(editingLessonId)} onChange={(event) => { setSelectedYearId(event.target.value); setError(''); setMessage('') }}>
         {years.map((year) => <option value={year.id} key={year.id}>{year.starts_on} — {year.ends_on}</option>)}
       </select>
-      {selectedYear && <form className="auth-form" onSubmit={createLesson}>
-        <h3>{editingLessonId ? 'Изменить урок' : 'Добавить урок'}</h3>
-        <label htmlFor="lesson-subject">Предмет</label>
-        <input id="lesson-subject" type="text" maxLength={80} value={lessonDraft.subject} onChange={(event) => setLessonDraft((current) => ({ ...current, subject: event.target.value }))} placeholder="Например, Математика" required />
-        <div className="parent-form-grid"><div><label htmlFor="lesson-weekday">День</label><select id="lesson-weekday" className="parent-select" value={lessonDraft.weekday} onChange={(event) => setLessonDraft((current) => ({ ...current, weekday: event.target.value }))}>{weekdays.map((day) => <option value={day.value} key={day.value}>{day.label}</option>)}</select></div><div><label htmlFor="lesson-order">Номер урока</label><input id="lesson-order" type="number" min="1" inputMode="numeric" value={lessonDraft.lessonOrder} onChange={(event) => setLessonDraft((current) => ({ ...current, lessonOrder: event.target.value }))} required /></div></div>
-        <div className="parent-form-grid"><div><label htmlFor="lesson-start">Начало</label><input id="lesson-start" type="time" value={lessonDraft.startsAt} onChange={(event) => setLessonDraft((current) => ({ ...current, startsAt: event.target.value }))} required /></div><div><label htmlFor="lesson-end">Окончание</label><input id="lesson-end" type="time" value={lessonDraft.endsAt} onChange={(event) => setLessonDraft((current) => ({ ...current, endsAt: event.target.value }))} required /></div></div>
-        <label htmlFor="lesson-things">Что взять с собой</label>
-        <input id="lesson-things" type="text" value={lessonDraft.things} onChange={(event) => setLessonDraft((current) => ({ ...current, things: event.target.value }))} placeholder="Тетрадь, учебник, ручка" />
-        <p className="field-help">Перечислите вещи через запятую. Повторы будут объединены.</p>
-        <button className="primary-button" type="submit" disabled={savingLesson}>{savingLesson ? 'Сохраняем…' : editingLessonId ? 'Сохранить изменения' : 'Добавить урок'}</button>
-        {editingLessonId && <button className="secondary-button" type="button" onClick={requestCancelEditing} disabled={savingLesson}>Отменить изменения</button>}
+      {selectedYear && !editingLessonId && <form className="auth-form" onSubmit={createLesson}>
+        <h3>Добавить урок</h3>
+        <LessonFields draft={lessonDraft} setDraft={setLessonDraft} />
+        <button className="primary-button" type="submit" disabled={savingLesson}>{savingLesson ? 'Сохраняем…' : 'Добавить урок'}</button>
       </form>}
-      {confirmDiscard && <section className="parent-confirm" role="alert"><strong>Не сохранять изменения?</strong><p>Изменения этого урока будут потеряны.</p><div><button className="secondary-button" type="button" onClick={() => setConfirmDiscard(false)}>Продолжить редактирование</button><button className="danger-button" type="button" onClick={finishEditing}>Не сохранять</button></div></section>}
-      {lessonPendingDeletion && <section className="parent-confirm" role="alert"><strong>Удалить урок «{subjectTitle(lessonPendingDeletion)}»?</strong><p>Будет удалён только этот повторяющийся урок. Остальные уроки и предмет останутся.</p><div><button className="secondary-button" type="button" onClick={() => setLessonPendingDeletion(null)} disabled={deletingLesson}>Отмена</button><button className="danger-button" type="button" onClick={deleteLesson} disabled={deletingLesson}>{deletingLesson ? 'Удаляем…' : 'Удалить урок'}</button></div></section>}
       <div className="parent-lessons" aria-live="polite">
         <h3>Сохранённые уроки</h3>
         {lessons.length === 0 ? <p className="parent-empty">В этом учебном году уроков ещё нет.</p> : weekdays.map((day) => {
           const dayLessons = lessons.filter((lesson) => lesson.weekday === day.value)
           if (dayLessons.length === 0) return null
-          return <section className="parent-day" key={day.value}><h4>{day.label}</h4>{dayLessons.map((lesson) => <article className="parent-lesson-row" key={lesson.id}><strong>{lesson.lesson_order}. {subjectTitle(lesson)}</strong><span>{localTime(lesson.starts_at)}–{localTime(lesson.ends_at)}</span>{lesson.things.length > 0 && <p>Взять: {lesson.things.join(', ')}</p>}<div className="parent-lesson-actions"><button type="button" onClick={() => beginEditing(lesson)} disabled={Boolean(editingLessonId) && editingLessonId !== lesson.id}>Изменить</button><button type="button" onClick={() => { setLessonPendingDeletion(lesson); setConfirmDiscard(false) }} disabled={deletingLesson}>Удалить</button></div></article>)}</section>
+          return <section className="parent-day" key={day.value}><h4>{day.label}</h4>{dayLessons.map((lesson) => <article className="parent-lesson-row" key={lesson.id}><strong>{lesson.lesson_order}. {subjectTitle(lesson)}</strong><span>{localTime(lesson.starts_at)}–{localTime(lesson.ends_at)}</span>{lesson.things.length > 0 && <p>Взять: {lesson.things.join(', ')}</p>}<div className="parent-lesson-actions"><button type="button" onClick={() => beginEditing(lesson)} disabled={Boolean(editingLessonId) && editingLessonId !== lesson.id}>Изменить</button><button type="button" onClick={() => { setLessonPendingDeletion(lesson); setConfirmDiscard(false) }} disabled={deletingLesson}>Удалить</button></div>{editingLessonId === lesson.id && <form className="parent-inline-form" onSubmit={createLesson}><h3>Изменить урок</h3><LessonFields draft={lessonDraft} setDraft={setLessonDraft} /><button className="primary-button" type="submit" disabled={savingLesson}>{savingLesson ? 'Сохраняем…' : 'Сохранить изменения'}</button><button className="secondary-button" type="button" onClick={requestCancelEditing} disabled={savingLesson}>Отменить изменения</button>{confirmDiscard && <section className="parent-confirm" role="alert"><strong>Не сохранять изменения?</strong><p>Изменения этого урока будут потеряны.</p><div><button className="secondary-button" type="button" onClick={() => setConfirmDiscard(false)}>Продолжить</button><button className="danger-button" type="button" onClick={finishEditing}>Не сохранять</button></div></section>}</form>}{lessonPendingDeletion?.id === lesson.id && <section className="parent-confirm" role="alert"><strong>Удалить урок «{subjectTitle(lesson)}»?</strong><p>Будет удалён только этот повторяющийся урок. Остальные уроки и предмет останутся.</p><div><button className="secondary-button" type="button" onClick={() => setLessonPendingDeletion(null)} disabled={deletingLesson}>Отмена</button><button className="danger-button" type="button" onClick={deleteLesson} disabled={deletingLesson}>{deletingLesson ? 'Удаляем…' : 'Удалить урок'}</button></div></section>}</article>)}</section>
         })}
       </div>
     </>}
