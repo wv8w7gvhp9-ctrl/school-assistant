@@ -38,11 +38,11 @@ export function CloudSchedule() {
   const isToday = selectedDay === today.weekday
 
   return <section className="screen"><div className="screen-heading"><div><p className="eyebrow">Моя неделя</p><h1>Расписание</h1></div></div>
-    <div className="day-picker" aria-label="Выберите день">{childWeekdays.map((day) => <button type="button" onClick={() => setSelectedDay(day.value)} className={day.value === selectedDay ? 'selected' : ''} aria-pressed={day.value === selectedDay} key={day.value}>{day.short}<span>{day.value === today.weekday ? 'сегодня' : ''}</span></button>)}</div>
+    <div className="day-picker" aria-label="Выберите день">{childWeekdays.map((day) => <button type="button" onClick={() => setSelectedDay(day.value)} className={`${day.value === selectedDay ? 'selected ' : ''}${day.value === today.weekday ? 'today' : ''}`} aria-pressed={day.value === selectedDay} aria-label={`${day.full}${day.value === today.weekday ? ', сегодня' : ''}`} key={day.value}>{day.short}</button>)}</div>
     <p className="date-label">{isToday ? `Сегодня, ${today.label}` : selected.full}</p>
     {state === 'loading' && <p className="child-cloud-state" role="status">Загружаем твоё расписание…</p>}
     {state === 'error' && <p className="auth-message error" role="alert">Не получилось загрузить расписание. Проверь интернет и обнови страницу.</p>}
     {state === 'ready' && dayLessons.length === 0 && <p className="child-cloud-state">На этот день уроков пока нет.</p>}
-    {state === 'ready' && dayLessons.length > 0 && <div className="timeline">{dayLessons.map((lesson) => <article className="lesson-card" key={`${lesson.weekday}-${lesson.lesson_order}`}><time>{timeRange(lesson)}</time><span className="timeline-dot" /><div><p className="eyebrow">Урок {lesson.lesson_order}</p><h2>{lesson.subject_title}</h2>{lesson.things.length > 0 && <p className="lesson-things">Взять: {lesson.things.join(' · ')}</p>}</div></article>)}</div>}
+    {state === 'ready' && dayLessons.length > 0 && <div className="timeline">{dayLessons.map((lesson) => <article className="lesson-card" key={`${lesson.weekday}-${lesson.lesson_order}`}><time>{timeRange(lesson)}</time><span className="timeline-dot" /><div><p className="eyebrow">Урок {lesson.lesson_order}</p><h2>{lesson.subject_title}</h2></div>{lesson.things.length > 0 && <p className="lesson-things">Взять: {lesson.things.join(' · ')}</p>}</article>)}</div>}
   </section>
 }
