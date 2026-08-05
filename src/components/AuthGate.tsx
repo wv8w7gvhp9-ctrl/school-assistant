@@ -61,7 +61,7 @@ function ParentSignedIn({ session }: { session: Session }) {
   return <main className="auth-page"><section className="auth-card"><p className="eyebrow">Вход подтверждён</p><h1>Здравствуйте!</h1><p>Вы вошли как родитель: {session.user.email}.</p>{loadingFamily && <p className="auth-loading">Проверяем семейный профиль…</p>}{!loadingFamily && !family && <form className="auth-form" onSubmit={createFamily}><label htmlFor="child-name">Как зовут ребёнка?</label><p className="field-help">Достаточно имени или домашнего псевдонима. Другие личные данные не нужны.</p><input id="child-name" name="child-name" type="text" autoComplete="off" maxLength={48} value={childName} onChange={(event) => { setChildName(event.target.value); setFamilyError('') }} placeholder="Например, Миша" required /><button className="primary-button" type="submit" disabled={creatingFamily}>{creatingFamily ? 'Создаём профиль…' : 'Создать семейный профиль'}</button></form>}{family && <div className="family-success" role="status"><strong>Семья создана</strong><p>Профиль ребёнка: {family.child_name}.</p></div>}{family && <section className="link-code-panel"><h2>Подключить устройство ребёнка</h2><p>Откройте приложение на устройстве ребёнка, выберите «Подключить устройство ребёнка» и введите этот код.</p>{linkCode ? <div className="link-code" role="status"><strong>{linkCode.display_code}</strong><span>Код действует 15 минут и сработает только один раз.</span></div> : <button type="button" className="primary-button" onClick={createLinkCode} disabled={creatingCode}>{creatingCode ? 'Создаём код…' : 'Получить код подключения'}</button>}</section>}{familyError && <p className="auth-message error" role="alert">{familyError}</p>}<button type="button" className="secondary-button auth-button" onClick={signOut} disabled={signingOut}>{signingOut ? 'Выходим…' : 'Выйти'}</button></section></main>
 }
 
-function ChildConnect({ onBack }: { onBack: () => void }) {
+function ChildConnect({ onBack, onLinkStart }: { onBack: () => void; onLinkStart: () => void }) {
   const [code, setCode] = useState('')
   const [captchaToken, setCaptchaToken] = useState('')
   const [state, setState] = useState<'idle' | 'connecting' | 'error'>('idle')
@@ -74,6 +74,7 @@ function ChildConnect({ onBack }: { onBack: () => void }) {
     if (!supabase || !captchaToken || !code.trim()) return
     setState('connecting')
     setMessage('')
+    onLinkStart()
     const { error: signInError } = await supabase.auth.signInAnonymously({ options: { captchaToken } })
     if (signInError) { setState('error'); setMessage('Не удалось начать защищённое подключение. Попробуйте ещё раз.'); return }
     const { error: redeemError } = await supabase.rpc('redeem_child_link_code', { input_code: code })
@@ -88,16 +89,32 @@ function ChildConnect({ onBack }: { onBack: () => void }) {
   return <main className="auth-page"><section className="auth-card"><p className="eyebrow">Для ребёнка</p><h1>Подключить устройство</h1><p>Попроси родителя показать короткий код. Почта и пароль не нужны.</p>{turnstileSiteKey ? <form className="auth-form" onSubmit={connect}><label htmlFor="child-code">Код подключения</label><input id="child-code" name="child-code" type="text" inputMode="text" autoComplete="one-time-code" maxLength={14} value={code} onChange={(event) => { setCode(event.target.value.toUpperCase()); setMessage('') }} placeholder="ABCD-EFGH-IJKL" required /><Turnstile siteKey={turnstileSiteKey} onToken={onToken} onError={onCaptchaError} /><button className="primary-button" type="submit" disabled={state === 'connecting' || !captchaToken}>{state === 'connecting' ? 'Подключаем…' : 'Подключить устройство'}</button></form> : <p className="auth-message error" role="alert">Защита подключения ещё не настроена. Попросите родителя завершить настройку.</p>}{message && <p className="auth-message error" role="alert">{message}</p>}<button type="button" className="text-button auth-back" onClick={onBack}>Я родитель</button></section></main>
 }
 
-function ChildSignedIn() {
+function ChildSignedIn({ waitForLink, onLinkResolved }: { waitForLink: boolean; onLinkResolved: () => void }) {
   const [name, setName] = useState<string | null>(null)
   const [error, setError] = useState('')
   useEffect(() => {
-    if (!supabase) return
-    void supabase.rpc('get_my_child_profile').then(({ data, error: profileError }) => {
-      if (profileError || !data?.[0]) setError('Устройство ещё не подключено. Попроси родителя создать новый код.')
-      else setName((data[0] as { child_name: string }).child_name)
-    })
-  }, [])
+    const client = supabase
+    if (!client) return
+    let cancelled = false
+    let attempts = 0
+    const loadProfile = async () => {
+      const { data, error: profileError } = await client.rpc('get_my_child_profile')
+      if (cancelled) return
+      if (!profileError && data?.[0]) {
+        setName((data[0] as { child_name: string }).child_name)
+        onLinkResolved()
+        return
+      }
+      attempts += 1
+      if (waitForLink && attempts < 8) {
+        window.setTimeout(loadProfile, 350)
+        return
+      }
+      setError('Устройство ещё не подключено. Попроси родителя создать новый код.')
+    }
+    void loadProfile()
+    return () => { cancelled = true }
+  }, [onLinkResolved, waitForLink])
   return <main className="auth-page"><section className="auth-card"><p className="eyebrow">Устройство ребёнка</p><h1>{name ? `Готово, ${name}!` : 'Подключаем устройство…'}</h1>{name ? <p>Устройство безопасно подключено к семейному профилю. Расписание, домашка и книги появятся здесь после переноса данных в облако.</p> : error ? <p className="auth-message error" role="alert">{error}</p> : <p className="auth-loading">Проверяем код…</p>}</section></main>
 }
 
@@ -107,6 +124,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [email, setEmail] = useState('')
   const [state, setState] = useState<AuthState>('idle')
   const [screen, setScreen] = useState<'parent' | 'child'>('parent')
+  const [childLinkPending, setChildLinkPending] = useState(false)
+  const handleChildLinkResolved = useCallback(() => setChildLinkPending(false), [])
 
   useEffect(() => {
     if (!supabase) return
@@ -131,9 +150,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (!supabase) return <MissingConfiguration>{children}</MissingConfiguration>
   if (loading) return <main className="auth-page"><p className="auth-loading">Проверяем безопасную сессию…</p></main>
-  if (session?.user.is_anonymous) return <ChildSignedIn />
+  if (session?.user.is_anonymous) return <ChildSignedIn waitForLink={childLinkPending} onLinkResolved={handleChildLinkResolved} />
   if (session) return <ParentSignedIn session={session} />
 
-  if (screen === 'child') return <ChildConnect onBack={() => setScreen('parent')} />
+  if (screen === 'child') return <ChildConnect onBack={() => setScreen('parent')} onLinkStart={() => setChildLinkPending(true)} />
   return <main className="auth-page"><section className="auth-card"><p className="eyebrow">Для родителя</p><h1>Войдите по почте</h1><p>Мы отправим безопасную ссылку для входа. Ребёнку почта и пароль не понадобятся: его устройство подключается отдельно по короткому коду.</p><form className="auth-form" onSubmit={sendMagicLink}><label htmlFor="parent-email">Электронная почта</label><input id="parent-email" name="email" type="email" autoComplete="email" inputMode="email" value={email} onChange={(event) => { setEmail(event.target.value); setState('idle') }} placeholder="name@example.com" required /><button className="primary-button" type="submit" disabled={state === 'sending'}>{state === 'sending' ? 'Отправляем ссылку…' : 'Получить ссылку для входа'}</button></form>{state === 'sent' && <p className="auth-message success" role="status">Письмо отправлено. Откройте ссылку из почты в этом же браузере.</p>}{state === 'error' && <p className="auth-message error" role="alert">Не удалось отправить письмо. Проверьте адрес и повторите попытку.</p>}<button type="button" className="text-button auth-back" onClick={() => setScreen('child')}>Подключить устройство ребёнка</button></section></main>
 }
