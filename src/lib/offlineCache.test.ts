@@ -6,6 +6,10 @@ describe('ключи офлайн-снимков', () => {
     expect(offlineKey.homework('child-a')).not.toBe(offlineKey.homework('child-b'))
   })
 
+  it('изолируют профиль ребёнка по сессии устройства', () => {
+    expect(offlineKey.childProfile('device-a')).not.toBe(offlineKey.childProfile('device-b'))
+  })
+
   it('изолируют расписание по фактической дате', () => {
     expect(offlineKey.schedule('child', '2026-08-05')).not.toBe(offlineKey.schedule('child', '2026-08-06'))
   })

@@ -1,7 +1,9 @@
 import { lazy, Suspense, useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, turnstileSiteKey } from '../lib/supabase'
+import { loadWithOfflineFallback, offlineKey } from '../lib/offlineCache'
 import { ChildSessionProvider } from './ChildSession'
+import { useOnlineStatus } from './NetworkStatus'
 import { Turnstile } from './Turnstile'
 
 const ParentScheduleEditor = lazy(() => import('./ParentScheduleEditor').then((module) => ({ default: module.ParentScheduleEditor })))
@@ -13,6 +15,7 @@ const ParentBackpackReview = lazy(() => import('./ParentBackpackReview').then((m
 type AuthState = 'idle' | 'sending' | 'sent' | 'error'
 type FamilyProfile = { family_id: string; child_id: string; child_name: string }
 type LinkCode = { display_code: string; expires_at: string }
+type ChildProfileRow = { child_id: string; child_name: string }
 
 function MissingConfiguration({ children }: { children: ReactNode }) {
   return <>{children}<aside className="cloud-note" role="status"><strong>Облако не подключено в этой среде</strong><p>Добавьте публичные параметры Supabase в настройки окружения, чтобы проверить вход по почте.</p></aside></>
@@ -105,7 +108,8 @@ function ChildConnect({ onBack, onLinkStart }: { onBack: () => void; onLinkStart
   return <main className="auth-page"><section className="auth-card"><p className="eyebrow">Для ребёнка</p><h1>Подключить устройство</h1><p>Попроси родителя показать короткий код. Почта и пароль не нужны.</p>{turnstileSiteKey ? <form className="auth-form" onSubmit={connect}><label htmlFor="child-code">Код подключения</label><input id="child-code" name="child-code" type="text" inputMode="text" autoComplete="one-time-code" maxLength={14} value={code} onChange={(event) => { setCode(event.target.value.toUpperCase()); setMessage('') }} placeholder="ABCD-EFGH-IJKL" required /><Turnstile siteKey={turnstileSiteKey} onToken={onToken} onError={onCaptchaError} /><button className="primary-button" type="submit" disabled={state === 'connecting' || !captchaToken}>{state === 'connecting' ? 'Подключаем…' : 'Подключить устройство'}</button></form> : <p className="auth-message error" role="alert">Защита подключения ещё не настроена. Попросите родителя завершить настройку.</p>}{message && <p className="auth-message error" role="alert">{message}</p>}<button type="button" className="text-button auth-back" onClick={onBack}>Я родитель</button></section></main>
 }
 
-function ChildSignedIn({ waitForLink, onLinkResolved, children }: { waitForLink: boolean; onLinkResolved: () => void; children: ReactNode }) {
+function ChildSignedIn({ sessionUserId, waitForLink, onLinkResolved, children }: { sessionUserId: string; waitForLink: boolean; onLinkResolved: () => void; children: ReactNode }) {
+  const online = useOnlineStatus()
   const [profile, setProfile] = useState<{ childId: string; childName: string } | null>(null)
   const [error, setError] = useState('')
   useEffect(() => {
@@ -113,25 +117,36 @@ function ChildSignedIn({ waitForLink, onLinkResolved, children }: { waitForLink:
     if (!client) return
     let cancelled = false
     let attempts = 0
+    let retryTimer: number | null = null
     const loadProfile = async () => {
-      const { data, error: profileError } = await client.rpc('get_my_child_profile')
       if (cancelled) return
-      if (!profileError && data?.[0]) {
-        const child = data[0] as { child_id: string; child_name: string }
+      const result = await loadWithOfflineFallback<ChildProfileRow[]>(
+        offlineKey.childProfile(sessionUserId),
+        () => client.rpc('get_my_child_profile'),
+        online,
+      )
+      if (cancelled) return
+      const child = result.data?.[0]
+      if (child) {
         setProfile({ childId: child.child_id, childName: child.child_name })
+        setError('')
         onLinkResolved()
         return
       }
       attempts += 1
-      if (waitForLink && attempts < 8) {
-        window.setTimeout(loadProfile, 350)
+      if (online && waitForLink && attempts < 8) {
+        retryTimer = window.setTimeout(loadProfile, 350)
         return
       }
-      setError('Устройство ещё не подключено. Попроси родителя создать новый код.')
+      setProfile(null)
+      setError(online ? 'Устройство ещё не подключено. Попроси родителя создать новый код.' : 'Нет интернета, а профиль ребёнка ещё не сохранён на этом устройстве. Подключись к сети и открой приложение один раз.')
     }
     void loadProfile()
-    return () => { cancelled = true }
-  }, [onLinkResolved, waitForLink])
+    return () => {
+      cancelled = true
+      if (retryTimer !== null) window.clearTimeout(retryTimer)
+    }
+  }, [online, onLinkResolved, sessionUserId, waitForLink])
   if (profile) return <ChildSessionProvider profile={profile}>{children}</ChildSessionProvider>
   return <main className="auth-page"><section className="auth-card"><p className="eyebrow">Устройство ребёнка</p><h1>Подключаем устройство…</h1>{error ? <p className="auth-message error" role="alert">{error}</p> : <p className="auth-loading">Проверяем код…</p>}</section></main>
 }
@@ -168,7 +183,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (!supabase) return <MissingConfiguration>{children}</MissingConfiguration>
   if (loading) return <main className="auth-page"><p className="auth-loading">Проверяем безопасную сессию…</p></main>
-  if (session?.user.is_anonymous) return <ChildSignedIn waitForLink={childLinkPending} onLinkResolved={handleChildLinkResolved}>{children}</ChildSignedIn>
+  if (session?.user.is_anonymous) return <ChildSignedIn sessionUserId={session.user.id} waitForLink={childLinkPending} onLinkResolved={handleChildLinkResolved}>{children}</ChildSignedIn>
   if (session) return <ParentSignedIn session={session} />
 
   if (screen === 'child') return <ChildConnect onBack={() => setScreen('parent')} onLinkStart={() => setChildLinkPending(true)} />
