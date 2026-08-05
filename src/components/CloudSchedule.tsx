@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { childWeekdays, mondayFirstWeekday, timeRange, type CloudLesson } from '../domain/childSchedule'
 import { supabase } from '../lib/supabase'
-import { Icon } from './Icon'
 
 function samaraNow() {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -44,6 +43,6 @@ export function CloudSchedule() {
     {state === 'loading' && <p className="child-cloud-state" role="status">Загружаем твоё расписание…</p>}
     {state === 'error' && <p className="auth-message error" role="alert">Не получилось загрузить расписание. Проверь интернет и обнови страницу.</p>}
     {state === 'ready' && dayLessons.length === 0 && <p className="child-cloud-state">На этот день уроков пока нет.</p>}
-    {state === 'ready' && dayLessons.length > 0 && <div className="timeline">{dayLessons.map((lesson) => <article className="lesson-card" key={`${lesson.weekday}-${lesson.lesson_order}`}><time>{timeRange(lesson)}</time><span className="timeline-dot" /><div><p className="eyebrow">Урок {lesson.lesson_order}</p><h2>{lesson.subject_title}</h2>{lesson.things.length > 0 && <details className="things-details"><summary>Что взять <Icon name="chevron" /></summary><p>{lesson.things.join(' · ')}</p></details>}</div></article>)}</div>}
+    {state === 'ready' && dayLessons.length > 0 && <div className="timeline">{dayLessons.map((lesson) => <article className="lesson-card" key={`${lesson.weekday}-${lesson.lesson_order}`}><time>{timeRange(lesson)}</time><span className="timeline-dot" /><div><p className="eyebrow">Урок {lesson.lesson_order}</p><h2>{lesson.subject_title}</h2>{lesson.things.length > 0 && <p className="lesson-things">Взять: {lesson.things.join(' · ')}</p>}</div></article>)}</div>}
   </section>
 }
