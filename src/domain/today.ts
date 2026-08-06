@@ -8,10 +8,12 @@ export type BackpackItem = {
   checklist_id: string
   target_day: string
   status: BackpackStatus
+  checklist_updated_at?: string
   item_id: string
   item_text: string
   subject_titles: string[]
   checked: boolean
+  item_updated_at?: string
 }
 
 export function activeTodayLessons(lessons: CloudLesson[]) {

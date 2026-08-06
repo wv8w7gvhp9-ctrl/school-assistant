@@ -1,30 +1,52 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { CloudHomeworkAssignment } from '../domain/homework'
 import { offlineKey, saveOfflineSnapshot } from '../lib/offlineCache'
 import {
-  isTerminalHomeworkOutcome,
-  listHomeworkMutations,
+  isTerminalOfflineOutcome,
+  listOfflineMutations,
   markOfflineMutationFailed,
   offlineQueueChangedEvent,
   offlineQueueSyncedEvent,
   removeOfflineMutation,
-  runHomeworkSync,
-  type HomeworkSyncOutcome,
+  runOfflineSync,
+  type OfflineMutation,
+  type OfflineSyncOutcome,
 } from '../lib/offlineQueue'
 import { supabase } from '../lib/supabase'
-import type { CloudHomeworkAssignment } from '../domain/homework'
 import { useChildSession } from './ChildSession'
 import { useOnlineStatus } from './NetworkStatus'
 
 type SyncNotice = { kind: 'syncing' | 'success' | 'warning' | 'error'; text: string } | null
-const outcomes: HomeworkSyncOutcome[] = ['applied', 'already_applied', 'already_satisfied', 'conflict', 'missing', 'retry']
+const outcomes: OfflineSyncOutcome[] = ['applied', 'already_applied', 'already_satisfied', 'conflict', 'missing', 'not_ready', 'retry']
+
+function confirmedOutcome(row: { status?: string | null; outcome?: OfflineSyncOutcome } | undefined) {
+  if (!row?.outcome || !outcomes.includes(row.outcome)) {
+    return { outcome: 'retry' as const, status: null, error: 'Сервер не подтвердил синхронизацию' }
+  }
+  return { outcome: row.outcome, status: row.status ?? null }
+}
 
 export function OfflineSyncManager() {
   const profile = useChildSession()
   const online = useOnlineStatus()
   const syncing = useRef(false)
+  const rerunRequested = useRef(false)
   const noticeTimer = useRef<number | null>(null)
+  const retryTimer = useRef<number | null>(null)
   const [pendingCount, setPendingCount] = useState(0)
   const [notice, setNotice] = useState<SyncNotice>(null)
+
+  const clearRetryTimer = useCallback(() => {
+    if (retryTimer.current !== null) window.clearTimeout(retryTimer.current)
+    retryTimer.current = null
+  }, [])
+
+  const scheduleRetry = useCallback(() => {
+    clearRetryTimer()
+    retryTimer.current = window.setTimeout(() => {
+      window.dispatchEvent(new Event(offlineQueueChangedEvent))
+    }, 10_000)
+  }, [clearRetryTimer])
 
   const showTemporaryNotice = useCallback((next: Exclude<SyncNotice, null>) => {
     if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current)
@@ -34,58 +56,114 @@ export function OfflineSyncManager() {
 
   const refreshCount = useCallback(async () => {
     if (!profile) return []
-    const mutations = await listHomeworkMutations(profile.childId)
-    setPendingCount(mutations.length)
-    return mutations
+    try {
+      const mutations = await listOfflineMutations(profile.childId)
+      setPendingCount(mutations.length)
+      return mutations
+    } catch (error) {
+      console.error('Не удалось прочитать сохранённые действия', error)
+      setPendingCount(0)
+      setNotice({ kind: 'error', text: 'Не получилось открыть сохранённые действия на устройстве.' })
+      return []
+    }
   }, [profile])
+
+  const syncMutation = useCallback(async (mutation: OfflineMutation) => {
+    const client = supabase
+    if (!client) return { outcome: 'retry' as const, status: null, error: 'Облако не настроено' }
+
+    if (mutation.kind === 'submit_homework') {
+      const { data, error } = await client.rpc('sync_my_homework_submission', {
+        input_homework_id: mutation.homeworkId,
+        input_mutation_id: mutation.id,
+        input_expected_updated_at: mutation.expectedUpdatedAt,
+      })
+      if (error) return { outcome: 'retry' as const, status: null, error: error.message }
+      return confirmedOutcome(data?.[0] as { status?: string | null; outcome?: OfflineSyncOutcome } | undefined)
+    }
+
+    if (mutation.kind === 'set_backpack_item') {
+      const { data, error } = await client.rpc('sync_my_backpack_item', {
+        input_item_id: mutation.itemId,
+        input_mutation_id: mutation.id,
+        input_checked: mutation.checked,
+        input_expected_updated_at: mutation.expectedUpdatedAt,
+      })
+      if (error) return { outcome: 'retry' as const, status: null, error: error.message }
+      return confirmedOutcome(data?.[0] as { outcome?: OfflineSyncOutcome } | undefined)
+    }
+
+    const { data, error } = await client.rpc('sync_my_backpack_submission', {
+      input_checklist_id: mutation.checklistId,
+      input_mutation_id: mutation.id,
+      input_expected_updated_at: mutation.expectedUpdatedAt,
+    })
+    if (error) return { outcome: 'retry' as const, status: null, error: error.message }
+    return confirmedOutcome(data?.[0] as { status?: string | null; outcome?: OfflineSyncOutcome } | undefined)
+  }, [])
 
   const syncQueue = useCallback(async () => {
     const client = supabase
-    if (!client || !profile || !online || syncing.current) return
+    if (!client || !profile || !online) return
+    if (syncing.current) {
+      rerunRequested.current = true
+      return
+    }
+
     syncing.current = true
     try {
       const mutations = await refreshCount()
-      if (mutations.length === 0) return
+      if (mutations.length === 0) {
+        clearRetryTimer()
+        return
+      }
+
       setNotice({ kind: 'syncing', text: 'Отправляем сохранённые действия…' })
-      const results = await runHomeworkSync(mutations, async (mutation) => {
-        const { data, error } = await client.rpc('sync_my_homework_submission', {
-          input_homework_id: mutation.homeworkId,
-          input_mutation_id: mutation.id,
-          input_expected_updated_at: mutation.expectedUpdatedAt,
-        })
-        if (error) return { outcome: 'retry' as const, status: null, error: error.message }
-        const row = data?.[0] as { status?: string | null; outcome?: HomeworkSyncOutcome } | undefined
-        if (!row?.outcome || !outcomes.includes(row.outcome)) return { outcome: 'retry' as const, status: null, error: 'Сервер не подтвердил синхронизацию' }
-        return { outcome: row.outcome, status: row.status ?? null }
-      })
+      const results = await runOfflineSync(mutations, syncMutation, true)
 
       for (const result of results) {
-        if (isTerminalHomeworkOutcome(result.outcome)) await removeOfflineMutation(result.mutation.id)
+        if (isTerminalOfflineOutcome(result.outcome)) await removeOfflineMutation(result.mutation.id)
         else await markOfflineMutationFailed(result.mutation, result.error ?? 'Сетевая ошибка')
       }
 
-      const terminalResults = results.filter((result) => isTerminalHomeworkOutcome(result.outcome))
-      if (terminalResults.length > 0) {
+      const homeworkChanged = results.some((result) => result.mutation.kind === 'submit_homework' && isTerminalOfflineOutcome(result.outcome))
+      if (homeworkChanged) {
         const { data, error } = await client.rpc('get_my_homework_v2')
-        if (!error) await saveOfflineSnapshot(offlineKey.homework(profile.childId), (data ?? []) as CloudHomeworkAssignment[])
+        if (error) console.error('Не удалось обновить домашку после синхронизации', error)
+        else await saveOfflineSnapshot(offlineKey.homework(profile.childId), (data ?? []) as CloudHomeworkAssignment[])
+      }
+
+      const backpackChanged = results.some((result) => (result.mutation.kind === 'set_backpack_item' || result.mutation.kind === 'submit_backpack') && isTerminalOfflineOutcome(result.outcome))
+      if (backpackChanged) {
+        const { data, error } = await client.rpc('get_my_backpack_v2')
+        if (error) console.error('Не удалось обновить рюкзак после синхронизации', error)
+        else await saveOfflineSnapshot(offlineKey.backpack(profile.childId), data ?? [])
       }
 
       const remaining = await refreshCount()
       window.dispatchEvent(new CustomEvent(offlineQueueSyncedEvent, { detail: { childId: profile.childId, results } }))
-      if (results.some((result) => result.outcome === 'conflict' || result.outcome === 'missing')) {
-        showTemporaryNotice({ kind: 'warning', text: 'Задание изменилось у родителя. Открой «Домашку» и проверь обновление.' })
+
+      if (results.some((result) => result.outcome === 'conflict' || result.outcome === 'missing' || result.outcome === 'not_ready')) {
+        showTemporaryNotice({ kind: 'warning', text: 'Данные изменились на другом устройстве. Открой раздел и проверь обновление.' })
       } else if (remaining.length > 0) {
-        setNotice({ kind: 'error', text: 'Пока не удалось отправить действие. Повторим при следующем подключении.' })
+        setNotice({ kind: 'error', text: 'Пока не удалось отправить действие. Повторим автоматически.' })
+        scheduleRetry()
       } else {
+        clearRetryTimer()
         showTemporaryNotice({ kind: 'success', text: 'Сохранённые действия отправлены.' })
       }
     } catch (error) {
       console.error('Не удалось обработать офлайн-очередь', error)
-      setNotice({ kind: 'error', text: 'Пока не удалось отправить действие. Повторим при следующем подключении.' })
+      setNotice({ kind: 'error', text: 'Пока не удалось отправить действие. Повторим автоматически.' })
+      scheduleRetry()
     } finally {
       syncing.current = false
+      if (rerunRequested.current) {
+        rerunRequested.current = false
+        window.setTimeout(() => window.dispatchEvent(new Event(offlineQueueChangedEvent)), 0)
+      }
     }
-  }, [online, profile, refreshCount, showTemporaryNotice])
+  }, [clearRetryTimer, online, profile, refreshCount, scheduleRetry, showTemporaryNotice, syncMutation])
 
   useEffect(() => {
     const handleQueueChange = () => { if (online) void syncQueue(); else void refreshCount() }
@@ -100,7 +178,8 @@ export function OfflineSyncManager() {
 
   useEffect(() => () => {
     if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current)
-  }, [])
+    clearRetryTimer()
+  }, [clearRetryTimer])
 
   if (!notice && pendingCount === 0) return null
   const visibleNotice = notice ?? { kind: 'warning' as const, text: `${pendingCount} ${pendingCount === 1 ? 'действие ждёт' : 'действия ждут'} отправки.` }

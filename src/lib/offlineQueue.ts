@@ -1,18 +1,36 @@
 import { offlineMutationStore, openOfflineDatabase } from './offlineCache'
 
-export type HomeworkSubmissionMutation = {
+type OfflineMutationBase = {
   id: string
-  kind: 'submit_homework'
   childId: string
-  homeworkId: string
-  expectedUpdatedAt: string
   createdAt: string
   attempts: number
   lastError: string | null
 }
 
-export type HomeworkSyncOutcome = 'applied' | 'already_applied' | 'already_satisfied' | 'conflict' | 'missing' | 'retry'
-export type HomeworkSyncResult = { mutation: HomeworkSubmissionMutation; outcome: HomeworkSyncOutcome; status: string | null; error?: string }
+export type HomeworkSubmissionMutation = OfflineMutationBase & {
+  kind: 'submit_homework'
+  homeworkId: string
+  expectedUpdatedAt: string
+}
+
+export type BackpackItemMutation = OfflineMutationBase & {
+  kind: 'set_backpack_item'
+  checklistId: string
+  itemId: string
+  checked: boolean
+  expectedUpdatedAt: string
+}
+
+export type BackpackSubmissionMutation = OfflineMutationBase & {
+  kind: 'submit_backpack'
+  checklistId: string
+  expectedUpdatedAt: string
+}
+
+export type OfflineMutation = HomeworkSubmissionMutation | BackpackItemMutation | BackpackSubmissionMutation
+export type OfflineSyncOutcome = 'applied' | 'already_applied' | 'already_satisfied' | 'conflict' | 'missing' | 'not_ready' | 'retry'
+export type OfflineSyncResult = { mutation: OfflineMutation; outcome: OfflineSyncOutcome; status: string | null; error?: string }
 
 export const offlineQueueChangedEvent = 'school-assistant:offline-queue-changed'
 export const offlineQueueSyncedEvent = 'school-assistant:offline-queue-synced'
@@ -25,35 +43,97 @@ function transactionComplete(transaction: IDBTransaction) {
   })
 }
 
-export async function listHomeworkMutations(childId: string) {
+function createMutationBase(childId: string): OfflineMutationBase {
+  return {
+    id: crypto.randomUUID(),
+    childId,
+    createdAt: new Date().toISOString(),
+    attempts: 0,
+    lastError: null,
+  }
+}
+
+function mutationPriority(mutation: OfflineMutation) {
+  return mutation.kind === 'submit_backpack' ? 1 : 0
+}
+
+export function sortOfflineMutations(mutations: OfflineMutation[]) {
+  return [...mutations].sort((left, right) => {
+    const timeOrder = left.createdAt.localeCompare(right.createdAt)
+    if (timeOrder !== 0) return timeOrder
+    return mutationPriority(left) - mutationPriority(right)
+  })
+}
+
+async function readAllOfflineMutations() {
   const database = await openOfflineDatabase()
   const transaction = database.transaction(offlineMutationStore, 'readonly')
   const request = transaction.objectStore(offlineMutationStore).getAll()
-  const all = await new Promise<HomeworkSubmissionMutation[]>((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result as HomeworkSubmissionMutation[])
+  return await new Promise<OfflineMutation[]>((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result as OfflineMutation[])
     request.onerror = () => reject(request.error ?? new Error('Offline queue could not be read'))
   })
-  return all.filter((mutation) => mutation.kind === 'submit_homework' && mutation.childId === childId).sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+}
+
+async function putOfflineMutation(mutation: OfflineMutation) {
+  const database = await openOfflineDatabase()
+  const transaction = database.transaction(offlineMutationStore, 'readwrite')
+  transaction.objectStore(offlineMutationStore).put(mutation)
+  await transactionComplete(transaction)
+  return mutation
+}
+
+export async function listOfflineMutations(childId: string) {
+  return sortOfflineMutations((await readAllOfflineMutations()).filter((mutation) => mutation.childId === childId))
+}
+
+export async function listHomeworkMutations(childId: string) {
+  return (await listOfflineMutations(childId)).filter((mutation): mutation is HomeworkSubmissionMutation => mutation.kind === 'submit_homework')
+}
+
+export async function listBackpackMutations(childId: string) {
+  return (await listOfflineMutations(childId)).filter((mutation): mutation is BackpackItemMutation | BackpackSubmissionMutation => mutation.kind === 'set_backpack_item' || mutation.kind === 'submit_backpack')
 }
 
 export async function enqueueHomeworkSubmission(childId: string, homeworkId: string, expectedUpdatedAt: string) {
   const existing = (await listHomeworkMutations(childId)).find((mutation) => mutation.homeworkId === homeworkId)
   if (existing) return existing
-  const mutation: HomeworkSubmissionMutation = {
-    id: crypto.randomUUID(),
+  return putOfflineMutation({
+    ...createMutationBase(childId),
     kind: 'submit_homework',
-    childId,
     homeworkId,
     expectedUpdatedAt,
-    createdAt: new Date().toISOString(),
-    attempts: 0,
-    lastError: null,
-  }
-  const database = await openOfflineDatabase()
-  const transaction = database.transaction(offlineMutationStore, 'readwrite')
-  transaction.objectStore(offlineMutationStore).add(mutation)
-  await transactionComplete(transaction)
-  return mutation
+  })
+}
+
+export async function enqueueBackpackItem(
+  childId: string,
+  checklistId: string,
+  itemId: string,
+  checked: boolean,
+  expectedUpdatedAt: string,
+) {
+  const existing = (await listBackpackMutations(childId)).find((mutation): mutation is BackpackItemMutation => mutation.kind === 'set_backpack_item' && mutation.itemId === itemId)
+  if (existing) return putOfflineMutation({ ...existing, checked, attempts: 0, lastError: null })
+  return putOfflineMutation({
+    ...createMutationBase(childId),
+    kind: 'set_backpack_item',
+    checklistId,
+    itemId,
+    checked,
+    expectedUpdatedAt,
+  })
+}
+
+export async function enqueueBackpackSubmission(childId: string, checklistId: string, expectedUpdatedAt: string) {
+  const existing = (await listBackpackMutations(childId)).find((mutation): mutation is BackpackSubmissionMutation => mutation.kind === 'submit_backpack' && mutation.checklistId === checklistId)
+  if (existing) return existing
+  return putOfflineMutation({
+    ...createMutationBase(childId),
+    kind: 'submit_backpack',
+    checklistId,
+    expectedUpdatedAt,
+  })
 }
 
 export async function removeOfflineMutation(id: string) {
@@ -63,28 +143,29 @@ export async function removeOfflineMutation(id: string) {
   await transactionComplete(transaction)
 }
 
-export async function markOfflineMutationFailed(mutation: HomeworkSubmissionMutation, error: string) {
-  const database = await openOfflineDatabase()
-  const transaction = database.transaction(offlineMutationStore, 'readwrite')
-  transaction.objectStore(offlineMutationStore).put({ ...mutation, attempts: mutation.attempts + 1, lastError: error })
-  await transactionComplete(transaction)
+export async function markOfflineMutationFailed(mutation: OfflineMutation, error: string) {
+  await putOfflineMutation({ ...mutation, attempts: mutation.attempts + 1, lastError: error })
 }
 
-export function isTerminalHomeworkOutcome(outcome: HomeworkSyncOutcome) {
+export function isTerminalOfflineOutcome(outcome: OfflineSyncOutcome) {
   return outcome !== 'retry'
 }
 
-export async function runHomeworkSync(
-  mutations: HomeworkSubmissionMutation[],
-  sync: (mutation: HomeworkSubmissionMutation) => Promise<Omit<HomeworkSyncResult, 'mutation'>>,
+export async function runOfflineSync(
+  mutations: OfflineMutation[],
+  sync: (mutation: OfflineMutation) => Promise<Omit<OfflineSyncResult, 'mutation'>>,
+  stopOnRetry = false,
 ) {
-  const results: HomeworkSyncResult[] = []
-  for (const mutation of mutations) {
+  const results: OfflineSyncResult[] = []
+  for (const mutation of sortOfflineMutations(mutations)) {
+    let result: OfflineSyncResult
     try {
-      results.push({ mutation, ...await sync(mutation) })
+      result = { mutation, ...await sync(mutation) }
     } catch (error) {
-      results.push({ mutation, outcome: 'retry', status: null, error: error instanceof Error ? error.message : 'Неизвестная ошибка синхронизации' })
+      result = { mutation, outcome: 'retry', status: null, error: error instanceof Error ? error.message : 'Неизвестная ошибка синхронизации' }
     }
+    results.push(result)
+    if (stopOnRetry && result.outcome === 'retry') break
   }
   return results
 }

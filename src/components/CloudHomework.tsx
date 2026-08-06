@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { filterHomework, homeworkProgress, preferredTimeLabel, samaraIsoDate, type CloudHomeworkAssignment, type HomeworkFilter } from '../domain/homework'
 import { supabase } from '../lib/supabase'
 import { loadWithOfflineFallback, offlineKey } from '../lib/offlineCache'
-import { enqueueHomeworkSubmission, listHomeworkMutations, notifyOfflineQueueChanged, offlineQueueSyncedEvent, type HomeworkSyncResult } from '../lib/offlineQueue'
+import { enqueueHomeworkSubmission, listHomeworkMutations, notifyOfflineQueueChanged, offlineQueueSyncedEvent, type OfflineSyncResult } from '../lib/offlineQueue'
 import { Icon } from './Icon'
 import { StatusChip } from './UI'
 import { useChildSession } from './ChildSession'
@@ -43,12 +43,14 @@ export function CloudHomework() {
       setQueuedIds(new Set(mutations.map((mutation) => mutation.homeworkId)))
     }
     const handleSync = (event: Event) => {
-      const detail = (event as CustomEvent<{ childId: string; results: HomeworkSyncResult[] }>).detail
+      const detail = (event as CustomEvent<{ childId: string; results: OfflineSyncResult[] }>).detail
       if (!detail || detail.childId !== profile.childId) return
+      const homeworkResults = detail.results.filter((result) => result.mutation.kind === 'submit_homework')
+      if (homeworkResults.length === 0) return
       void refreshQueued()
-      if (detail.results.some((result) => result.outcome === 'conflict' || result.outcome === 'missing')) {
+      if (homeworkResults.some((result) => result.outcome === 'conflict' || result.outcome === 'missing')) {
         setMessage({ kind: 'warning', text: 'Задание изменилось у родителя. Проверь обновлённое задание.' })
-      } else if (detail.results.some((result) => result.outcome === 'applied' || result.outcome === 'already_applied' || result.outcome === 'already_satisfied')) {
+      } else if (homeworkResults.some((result) => result.outcome === 'applied' || result.outcome === 'already_applied' || result.outcome === 'already_satisfied')) {
         setMessage({ kind: 'success', text: 'Готово! Задание отправлено родителю.' })
       } else {
         setMessage({ kind: 'warning', text: 'Действие сохранено на устройстве. Отправим при следующем подключении.' })

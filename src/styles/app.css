@@ -149,10 +149,12 @@ p { color: var(--color-text-muted); font-size: 16px; line-height: 1.5; }
 .backpack-items { display: grid; gap: var(--space-2); margin-top: var(--space-5); }
 .backpack-item { display: flex; align-items: center; gap: var(--space-3); min-height: 56px; padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text); background: var(--color-surface-subtle); }
 .backpack-item:has(input:checked) { border-color: var(--color-accent-aqua); background: var(--color-soft-aqua); }
+.backpack-item.pending-sync { border-style: dashed; border-color: var(--color-offline); }
 .backpack-item input { width: 24px; height: 24px; flex: 0 0 auto; accent-color: var(--color-success); }
 .backpack-item span { display: grid; gap: var(--space-1); min-width: 0; }
 .backpack-item strong, .backpack-item small { overflow-wrap: anywhere; }
 .backpack-item small { color: var(--color-text-muted); font-size: 13px; }
+.backpack-item .pending-sync-label { color: var(--color-offline); font-weight: 700; }
 .backpack-progress { display: grid; gap: var(--space-2); margin: var(--space-5) 0; color: var(--color-text); font-weight: 700; }
 .backpack-progress progress { width: 100%; height: 16px; accent-color: var(--color-success); }
 .parent-backpack { display: grid; gap: var(--space-3); margin-top: var(--space-5); padding-top: var(--space-5); border-top: 1px solid var(--color-border); }
