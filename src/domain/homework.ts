@@ -7,6 +7,7 @@ export type CloudHomeworkAssignment = {
   preferred_by: string | null
   task: string
   status: HomeworkStatus
+  updated_at?: string
 }
 
 export type HomeworkFilter = 'Сегодня' | 'На завтра' | 'Выполнено'

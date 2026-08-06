@@ -10,18 +10,26 @@ export type OfflineLoadResult<T> = {
 type RpcResponse<T> = { data: T | null; error: unknown }
 
 const databaseName = 'school-assistant-offline'
-const storeName = 'snapshots'
+export const offlineSnapshotStore = 'snapshots'
+export const offlineMutationStore = 'mutations'
 let databasePromise: Promise<IDBDatabase> | null = null
 
-function openDatabase() {
+export function openOfflineDatabase() {
   if (typeof indexedDB === 'undefined') return Promise.reject(new Error('IndexedDB is unavailable'))
   if (databasePromise) return databasePromise
   databasePromise = new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(databaseName, 1)
+    const request = indexedDB.open(databaseName, 2)
     request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains(storeName)) request.result.createObjectStore(storeName, { keyPath: 'key' })
+      if (!request.result.objectStoreNames.contains(offlineSnapshotStore)) request.result.createObjectStore(offlineSnapshotStore, { keyPath: 'key' })
+      if (!request.result.objectStoreNames.contains(offlineMutationStore)) request.result.createObjectStore(offlineMutationStore, { keyPath: 'id' })
     }
-    request.onsuccess = () => resolve(request.result)
+    request.onsuccess = () => {
+      request.result.onversionchange = () => {
+        request.result.close()
+        databasePromise = null
+      }
+      resolve(request.result)
+    }
     request.onerror = () => reject(request.error ?? new Error('IndexedDB could not be opened'))
   })
   return databasePromise
@@ -29,9 +37,9 @@ function openDatabase() {
 
 export async function readOfflineSnapshot<T>(key: string): Promise<OfflineSnapshot<T> | null> {
   try {
-    const database = await openDatabase()
+    const database = await openOfflineDatabase()
     return await new Promise((resolve, reject) => {
-      const request = database.transaction(storeName, 'readonly').objectStore(storeName).get(key)
+      const request = database.transaction(offlineSnapshotStore, 'readonly').objectStore(offlineSnapshotStore).get(key)
       request.onsuccess = () => resolve((request.result as OfflineSnapshot<T> | undefined) ?? null)
       request.onerror = () => reject(request.error ?? new Error('Offline snapshot could not be read'))
     })
@@ -43,9 +51,9 @@ export async function readOfflineSnapshot<T>(key: string): Promise<OfflineSnapsh
 
 export async function saveOfflineSnapshot<T>(key: string, data: T, savedAt = new Date().toISOString()) {
   try {
-    const database = await openDatabase()
+    const database = await openOfflineDatabase()
     await new Promise<void>((resolve, reject) => {
-      const request = database.transaction(storeName, 'readwrite').objectStore(storeName).put({ key, data, savedAt } satisfies OfflineSnapshot<T>)
+      const request = database.transaction(offlineSnapshotStore, 'readwrite').objectStore(offlineSnapshotStore).put({ key, data, savedAt } satisfies OfflineSnapshot<T>)
       request.onsuccess = () => resolve()
       request.onerror = () => reject(request.error ?? new Error('Offline snapshot could not be saved'))
     })
