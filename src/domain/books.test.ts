@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { bookStatusLabel, filterBooks, validateReadingDiary, type CloudBook } from './books'
+import { applyReadingDiaryDraft, bookStatusLabel, filterBooks, validateReadingDiary, type CloudBook } from './books'
 
 const books: CloudBook[] = [
-  { id: '1', title: 'Денискины рассказы', author: 'В. Драгунский', status: 'reading', started_on: '2026-08-01', finished_on: null, main_characters: '', summary: '', rating: null, review_status: 'not_submitted' },
-  { id: '2', title: 'Волшебник Изумрудного города', author: 'А. Волков', status: 'finished', started_on: '2026-07-01', finished_on: '2026-07-20', main_characters: 'Элли', summary: 'Путешествие', rating: 5, review_status: 'approved' },
+  { id: '1', title: 'Денискины рассказы', author: 'В. Драгунский', status: 'reading', started_on: '2026-08-01', finished_on: null, main_characters: '', summary: '', rating: null, review_status: 'not_submitted', updated_at: '2026-08-05T10:00:00.000Z' },
+  { id: '2', title: 'Волшебник Изумрудного города', author: 'А. Волков', status: 'finished', started_on: '2026-07-01', finished_on: '2026-07-20', main_characters: 'Элли', summary: 'Путешествие', rating: 5, review_status: 'approved', updated_at: '2026-08-05T10:00:00.000Z' },
 ]
 
 describe('читательский дневник', () => {
@@ -30,5 +30,16 @@ describe('читательский дневник', () => {
     expect(bookStatusLabel('assigned')).toBe('Нужно прочитать')
     expect(bookStatusLabel('reading')).toBe('Читаю')
     expect(bookStatusLabel('finished')).toBe('Прочитано')
+  })
+
+  it('показывает локально сохранённый дневник до синхронизации', () => {
+    const updated = applyReadingDiaryDraft(books[0], { status: 'finished', startedOn: '2026-08-01', finishedOn: '2026-08-06', mainCharacters: 'Дениска', summary: 'Несколько рассказов', rating: 5 })
+    expect(updated).toMatchObject({ status: 'finished', review_status: 'pending_review', finished_on: '2026-08-06', rating: 5 })
+    expect(updated.updated_at).toBe(books[0].updated_at)
+  })
+
+  it('не снимает родительское подтверждение при правке текста', () => {
+    const updated = applyReadingDiaryDraft(books[1], { status: 'reading', startedOn: '2026-07-01', finishedOn: '2026-07-20', mainCharacters: 'Элли и Тотошка', summary: 'Уточнённое содержание', rating: 4 })
+    expect(updated).toMatchObject({ status: 'finished', review_status: 'approved', rating: 4 })
   })
 })

@@ -36,6 +36,25 @@ const backpackSubmissionMutation = (): OfflineMutation => ({
   lastError: null,
 })
 
+const readingDiaryMutation = (): OfflineMutation => ({
+  id: 'save-diary',
+  kind: 'save_reading_diary',
+  childId: 'child',
+  bookId: 'book',
+  expectedUpdatedAt: '2026-08-05T10:00:00.000Z',
+  draft: {
+    status: 'finished',
+    startedOn: '2026-08-01',
+    finishedOn: '2026-08-05',
+    mainCharacters: 'Дениска',
+    summary: 'Короткое содержание',
+    rating: 5,
+  },
+  createdAt: '2026-08-05T10:03:00.000Z',
+  attempts: 0,
+  lastError: null,
+})
+
 describe('повторная синхронизация действий ребёнка', () => {
   it('обрабатывает действия последовательно', async () => {
     const order: string[] = []
@@ -66,6 +85,17 @@ describe('повторная синхронизация действий реб�
     const [result] = await runOfflineSync([homeworkMutation('a')], async () => { throw new Error('network') })
     expect(result).toMatchObject({ outcome: 'retry', error: 'network' })
     expect(isTerminalOfflineOutcome(result.outcome)).toBe(false)
+  })
+
+  it('повторяет сохранение дневника целиком, не теряя длинные поля', async () => {
+    const mutation = readingDiaryMutation()
+    const [result] = await runOfflineSync([mutation], async (item) => {
+      expect(item.kind).toBe('save_reading_diary')
+      if (item.kind === 'save_reading_diary') expect(item.draft.summary).toBe('Короткое содержание')
+      throw new Error('network')
+    })
+    expect(result).toMatchObject({ outcome: 'retry', error: 'network' })
+    expect(result.mutation).toEqual(mutation)
   })
 
   it.each(['already_applied', 'already_satisfied', 'conflict', 'missing', 'not_ready'] as const)('завершает очередь для результата %s', (outcome) => {

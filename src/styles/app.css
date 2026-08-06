@@ -98,6 +98,12 @@ p { color: var(--color-text-muted); font-size: 16px; line-height: 1.5; }
 .book-review { display: block; width: fit-content; margin-top: var(--space-2); padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill); font-size: 12px; font-weight: 700; }
 .book-review.pending { color: var(--color-warning); background: var(--color-warning-soft); }
 .book-review.approved { color: var(--color-success); background: var(--color-success-soft); }
+.book-review.pending-sync { color: var(--color-offline); background: var(--color-surface-strong); }
+.cloud-book-card.pending-sync, .current-book.pending-sync { border-style: dashed; border-color: var(--color-offline); }
+.diary-draft-note { margin: 0; padding: var(--space-3); border-radius: var(--radius-md); font-weight: 700; }
+.diary-draft-note.success { color: var(--color-success); background: var(--color-success-soft); }
+.diary-draft-note.warning { color: var(--color-warning); background: var(--color-warning-soft); }
+.diary-draft-note.error { color: var(--color-danger); background: var(--color-danger-soft); }
 .sheet-backdrop { position: fixed; z-index: 4; inset: 0; display: grid; align-items: end; padding-top: var(--space-8); background: rgb(7 28 66 / 30%); }
 .reading-diary-sheet { width: min(100%, 680px); max-height: 92dvh; margin: 0 auto; padding: var(--space-5) var(--space-5) calc(var(--space-6) + env(safe-area-inset-bottom)); overflow-y: auto; border: 1px solid var(--color-border); border-radius: var(--radius-xl) var(--radius-xl) 0 0; background: var(--color-surface); box-shadow: var(--shadow-raised); }
 .sheet-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }

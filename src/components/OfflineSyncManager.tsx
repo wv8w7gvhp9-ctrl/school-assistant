@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { CloudBook } from '../domain/books'
 import type { CloudHomeworkAssignment } from '../domain/homework'
-import { offlineKey, saveOfflineSnapshot } from '../lib/offlineCache'
+import { deleteOfflineRecord, offlineKey, saveOfflineSnapshot } from '../lib/offlineCache'
 import {
   isTerminalOfflineOutcome,
   listOfflineMutations,
@@ -93,10 +94,26 @@ export function OfflineSyncManager() {
       return confirmedOutcome(data?.[0] as { outcome?: OfflineSyncOutcome } | undefined)
     }
 
-    const { data, error } = await client.rpc('sync_my_backpack_submission', {
-      input_checklist_id: mutation.checklistId,
+    if (mutation.kind === 'submit_backpack') {
+      const { data, error } = await client.rpc('sync_my_backpack_submission', {
+        input_checklist_id: mutation.checklistId,
+        input_mutation_id: mutation.id,
+        input_expected_updated_at: mutation.expectedUpdatedAt,
+      })
+      if (error) return { outcome: 'retry' as const, status: null, error: error.message }
+      return confirmedOutcome(data?.[0] as { status?: string | null; outcome?: OfflineSyncOutcome } | undefined)
+    }
+
+    const { data, error } = await client.rpc('sync_my_reading_diary', {
+      input_book_id: mutation.bookId,
       input_mutation_id: mutation.id,
       input_expected_updated_at: mutation.expectedUpdatedAt,
+      input_status: mutation.draft.status,
+      input_started_on: mutation.draft.startedOn || null,
+      input_finished_on: mutation.draft.finishedOn || null,
+      input_main_characters: mutation.draft.mainCharacters,
+      input_summary: mutation.draft.summary,
+      input_rating: mutation.draft.rating,
     })
     if (error) return { outcome: 'retry' as const, status: null, error: error.message }
     return confirmedOutcome(data?.[0] as { status?: string | null; outcome?: OfflineSyncOutcome } | undefined)
@@ -138,6 +155,22 @@ export function OfflineSyncManager() {
         const { data, error } = await client.rpc('get_my_backpack_v2')
         if (error) console.error('Не удалось обновить рюкзак после синхронизации', error)
         else await saveOfflineSnapshot(offlineKey.backpack(profile.childId), data ?? [])
+      }
+
+      const readingDiaryResults = results.filter((result) => result.mutation.kind === 'save_reading_diary' && isTerminalOfflineOutcome(result.outcome))
+      if (readingDiaryResults.length > 0) {
+        for (const result of readingDiaryResults) {
+          if (result.mutation.kind === 'save_reading_diary' && !['conflict', 'missing', 'not_ready'].includes(result.outcome)) {
+            try {
+              await deleteOfflineRecord(offlineKey.readingDiaryDraft(profile.childId, result.mutation.bookId))
+            } catch (error) {
+              console.error('Не удалось удалить отправленный черновик дневника', error)
+            }
+          }
+        }
+        const { data, error } = await client.rpc('get_my_books_v2')
+        if (error) console.error('Не удалось обновить книги после синхронизации', error)
+        else await saveOfflineSnapshot(offlineKey.books(profile.childId), (data ?? []) as CloudBook[])
       }
 
       const remaining = await refreshCount()

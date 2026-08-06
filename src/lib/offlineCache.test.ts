@@ -14,6 +14,11 @@ describe('ключи офлайн-снимков', () => {
     expect(offlineKey.schedule('child', '2026-08-05')).not.toBe(offlineKey.schedule('child', '2026-08-06'))
   })
 
+  it('изолируют черновики разных книг и детей', () => {
+    expect(offlineKey.readingDiaryDraft('child-a', 'book')).not.toBe(offlineKey.readingDiaryDraft('child-b', 'book'))
+    expect(offlineKey.readingDiaryDraft('child-a', 'book-1')).not.toBe(offlineKey.readingDiaryDraft('child-a', 'book-2'))
+  })
+
   it('показывают время последней синхронизации в Самаре', () => {
     expect(offlineSavedLabel('2026-08-05T08:30:00.000Z')).toMatch(/12:30/)
   })

@@ -16,7 +16,7 @@ export function ParentBooksEditor({ familyId, childId }: { familyId: string; chi
 
   async function loadBooks() {
     if (!supabase) return
-    const { data, error: requestError } = await supabase.from('books').select('id, title, author, status, started_on, finished_on, main_characters, summary, rating, review_status').eq('family_id', familyId).eq('child_id', childId).order('created_at', { ascending: false })
+    const { data, error: requestError } = await supabase.from('books').select('id, title, author, status, started_on, finished_on, main_characters, summary, rating, review_status, updated_at').eq('family_id', familyId).eq('child_id', childId).order('created_at', { ascending: false })
     if (requestError) throw requestError
     setBooks((data ?? []) as CloudBook[])
   }

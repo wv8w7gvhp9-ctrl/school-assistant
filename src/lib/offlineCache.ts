@@ -14,6 +14,14 @@ export const offlineSnapshotStore = 'snapshots'
 export const offlineMutationStore = 'mutations'
 let databasePromise: Promise<IDBDatabase> | null = null
 
+function offlineTransactionComplete(transaction: IDBTransaction) {
+  return new Promise<void>((resolve, reject) => {
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () => reject(transaction.error ?? new Error('Offline storage transaction failed'))
+    transaction.onabort = () => reject(transaction.error ?? new Error('Offline storage transaction was aborted'))
+  })
+}
+
 export function openOfflineDatabase() {
   if (typeof indexedDB === 'undefined') return Promise.reject(new Error('IndexedDB is unavailable'))
   if (databasePromise) return databasePromise
@@ -35,14 +43,32 @@ export function openOfflineDatabase() {
   return databasePromise
 }
 
+export async function readOfflineRecord<T>(key: string): Promise<OfflineSnapshot<T> | null> {
+  const database = await openOfflineDatabase()
+  return await new Promise((resolve, reject) => {
+    const request = database.transaction(offlineSnapshotStore, 'readonly').objectStore(offlineSnapshotStore).get(key)
+    request.onsuccess = () => resolve((request.result as OfflineSnapshot<T> | undefined) ?? null)
+    request.onerror = () => reject(request.error ?? new Error('Offline snapshot could not be read'))
+  })
+}
+
+export async function writeOfflineRecord<T>(key: string, data: T, savedAt = new Date().toISOString()) {
+  const database = await openOfflineDatabase()
+  const transaction = database.transaction(offlineSnapshotStore, 'readwrite')
+  transaction.objectStore(offlineSnapshotStore).put({ key, data, savedAt } satisfies OfflineSnapshot<T>)
+  await offlineTransactionComplete(transaction)
+}
+
+export async function deleteOfflineRecord(key: string) {
+  const database = await openOfflineDatabase()
+  const transaction = database.transaction(offlineSnapshotStore, 'readwrite')
+  transaction.objectStore(offlineSnapshotStore).delete(key)
+  await offlineTransactionComplete(transaction)
+}
+
 export async function readOfflineSnapshot<T>(key: string): Promise<OfflineSnapshot<T> | null> {
   try {
-    const database = await openOfflineDatabase()
-    return await new Promise((resolve, reject) => {
-      const request = database.transaction(offlineSnapshotStore, 'readonly').objectStore(offlineSnapshotStore).get(key)
-      request.onsuccess = () => resolve((request.result as OfflineSnapshot<T> | undefined) ?? null)
-      request.onerror = () => reject(request.error ?? new Error('Offline snapshot could not be read'))
-    })
+    return await readOfflineRecord<T>(key)
   } catch (error) {
     console.warn('Не удалось прочитать офлайн-кэш', error)
     return null
@@ -51,12 +77,7 @@ export async function readOfflineSnapshot<T>(key: string): Promise<OfflineSnapsh
 
 export async function saveOfflineSnapshot<T>(key: string, data: T, savedAt = new Date().toISOString()) {
   try {
-    const database = await openOfflineDatabase()
-    await new Promise<void>((resolve, reject) => {
-      const request = database.transaction(offlineSnapshotStore, 'readwrite').objectStore(offlineSnapshotStore).put({ key, data, savedAt } satisfies OfflineSnapshot<T>)
-      request.onsuccess = () => resolve()
-      request.onerror = () => reject(request.error ?? new Error('Offline snapshot could not be saved'))
-    })
+    await writeOfflineRecord(key, data, savedAt)
   } catch (error) {
     console.warn('Не удалось сохранить офлайн-кэш', error)
   }
@@ -93,6 +114,7 @@ export const offlineKey = {
   schedule: (childId: string, day: string) => `child:${childId}:schedule:${day}`,
   homework: (childId: string) => `child:${childId}:homework`,
   books: (childId: string) => `child:${childId}:books`,
+  readingDiaryDraft: (childId: string, bookId: string) => `child:${childId}:reading-diary-draft:${bookId}`,
   clubs: (childId: string) => `child:${childId}:clubs`,
   clubOccurrences: (childId: string, from: string, to: string) => `child:${childId}:club-occurrences:${from}:${to}`,
   backpack: (childId: string) => `child:${childId}:backpack`,

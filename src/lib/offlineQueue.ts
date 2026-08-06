@@ -1,4 +1,5 @@
 import { offlineMutationStore, openOfflineDatabase } from './offlineCache'
+import type { ReadingDiaryDraft } from '../domain/books'
 
 type OfflineMutationBase = {
   id: string
@@ -28,7 +29,14 @@ export type BackpackSubmissionMutation = OfflineMutationBase & {
   expectedUpdatedAt: string
 }
 
-export type OfflineMutation = HomeworkSubmissionMutation | BackpackItemMutation | BackpackSubmissionMutation
+export type ReadingDiaryMutation = OfflineMutationBase & {
+  kind: 'save_reading_diary'
+  bookId: string
+  expectedUpdatedAt: string
+  draft: ReadingDiaryDraft
+}
+
+export type OfflineMutation = HomeworkSubmissionMutation | BackpackItemMutation | BackpackSubmissionMutation | ReadingDiaryMutation
 export type OfflineSyncOutcome = 'applied' | 'already_applied' | 'already_satisfied' | 'conflict' | 'missing' | 'not_ready' | 'retry'
 export type OfflineSyncResult = { mutation: OfflineMutation; outcome: OfflineSyncOutcome; status: string | null; error?: string }
 
@@ -95,6 +103,10 @@ export async function listBackpackMutations(childId: string) {
   return (await listOfflineMutations(childId)).filter((mutation): mutation is BackpackItemMutation | BackpackSubmissionMutation => mutation.kind === 'set_backpack_item' || mutation.kind === 'submit_backpack')
 }
 
+export async function listReadingDiaryMutations(childId: string) {
+  return (await listOfflineMutations(childId)).filter((mutation): mutation is ReadingDiaryMutation => mutation.kind === 'save_reading_diary')
+}
+
 export async function enqueueHomeworkSubmission(childId: string, homeworkId: string, expectedUpdatedAt: string) {
   const existing = (await listHomeworkMutations(childId)).find((mutation) => mutation.homeworkId === homeworkId)
   if (existing) return existing
@@ -133,6 +145,23 @@ export async function enqueueBackpackSubmission(childId: string, checklistId: st
     kind: 'submit_backpack',
     checklistId,
     expectedUpdatedAt,
+  })
+}
+
+export async function enqueueReadingDiary(
+  childId: string,
+  bookId: string,
+  expectedUpdatedAt: string,
+  draft: ReadingDiaryDraft,
+) {
+  const existing = (await listReadingDiaryMutations(childId)).find((mutation) => mutation.bookId === bookId)
+  if (existing) return putOfflineMutation({ ...existing, draft, attempts: 0, lastError: null })
+  return putOfflineMutation({
+    ...createMutationBase(childId),
+    kind: 'save_reading_diary',
+    bookId,
+    expectedUpdatedAt,
+    draft,
   })
 }
 

@@ -13,6 +13,7 @@ export type CloudBook = {
   summary: string
   rating: number | null
   review_status: BookReviewStatus
+  updated_at: string
 }
 
 export type ReadingDiaryDraft = {
@@ -22,6 +23,12 @@ export type ReadingDiaryDraft = {
   mainCharacters: string
   summary: string
   rating: number | null
+}
+
+export type StoredReadingDiaryDraft = {
+  bookId: string
+  expectedUpdatedAt: string
+  draft: ReadingDiaryDraft
 }
 
 export function filterBooks(books: CloudBook[], filter: BookFilter) {
@@ -35,6 +42,20 @@ export function validateReadingDiary(draft: ReadingDiaryDraft) {
   if (draft.rating !== null && (!Number.isInteger(draft.rating) || draft.rating < 1 || draft.rating > 5)) return 'Выбери оценку от 1 до 5.'
   if (draft.status === 'finished' && !draft.finishedOn) return 'Укажи дату, когда закончил читать.'
   return null
+}
+
+export function applyReadingDiaryDraft(book: CloudBook, draft: ReadingDiaryDraft): CloudBook {
+  const approved = book.review_status === 'approved'
+  return {
+    ...book,
+    status: approved ? 'finished' : draft.status,
+    review_status: approved ? 'approved' : draft.status === 'finished' ? 'pending_review' : 'not_submitted',
+    started_on: draft.startedOn || null,
+    finished_on: draft.finishedOn || null,
+    main_characters: draft.mainCharacters,
+    summary: draft.summary,
+    rating: draft.rating,
+  }
 }
 
 export function bookStatusLabel(status: BookStatus) {
