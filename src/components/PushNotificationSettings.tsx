@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { pushEnableFailureMessage, safePushErrorCode, urlBase64ToUint8Array, type PushEnableStage } from '../domain/notifications'
+import { pushEnableFailureMessage, safePushErrorCode, urlBase64ToArrayBuffer, type PushEnableStage } from '../domain/notifications'
 import { supabase, vapidPublicKey } from '../lib/supabase'
 import { useOnlineStatus } from './NetworkStatus'
 
@@ -114,7 +114,7 @@ export function PushNotificationSettings({ role, onChanged }: { role: 'parent' |
       const existing = await registration.pushManager.getSubscription()
       const subscription = existing ?? await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+        applicationServerKey: urlBase64ToArrayBuffer(vapidPublicKey),
       })
       try {
         stage = 'server'

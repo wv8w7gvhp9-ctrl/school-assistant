@@ -6,7 +6,7 @@ import {
   pushEnableFailureMessage,
   safePushErrorCode,
   samaraDateTimeParts,
-  urlBase64ToUint8Array,
+  urlBase64ToArrayBuffer,
 } from './notifications'
 
 describe('планирование уведомлений', () => {
@@ -33,8 +33,10 @@ describe('планирование уведомлений', () => {
     expect(normalizeNotificationTime('24:10')).toBeNull()
   })
 
-  it('преобразует публичный VAPID-ключ без добавления секрета', () => {
-    expect([...urlBase64ToUint8Array('AQIDBA')]).toEqual([1, 2, 3, 4])
+  it('передаёт публичный VAPID-ключ как отдельный ArrayBuffer для Safari', () => {
+    const buffer = urlBase64ToArrayBuffer('AQIDBA')
+    expect(buffer).toBeInstanceOf(ArrayBuffer)
+    expect([...new Uint8Array(buffer)]).toEqual([1, 2, 3, 4])
   })
 
   it('показывает безопасный этап и код ошибки push без технического текста', () => {
