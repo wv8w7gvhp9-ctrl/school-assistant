@@ -3,6 +3,8 @@ import {
   defaultNotificationPreferences,
   normalizeNotificationTime,
   notificationEventKey,
+  pushEnableFailureMessage,
+  safePushErrorCode,
   samaraDateTimeParts,
   urlBase64ToUint8Array,
 } from './notifications'
@@ -33,5 +35,12 @@ describe('планирование уведомлений', () => {
 
   it('преобразует публичный VAPID-ключ без добавления секрета', () => {
     expect([...urlBase64ToUint8Array('AQIDBA')]).toEqual([1, 2, 3, 4])
+  })
+
+  it('показывает безопасный этап и код ошибки push без технического текста', () => {
+    expect(safePushErrorCode({ name: 'AbortError', message: 'endpoint-secret-value' })).toBe('AbortError')
+    expect(safePushErrorCode({ code: '42501', message: 'private server detail' })).toBe('42501')
+    expect(safePushErrorCode({ code: 'unsafe code with spaces' })).toBe('unknown')
+    expect(pushEnableFailureMessage('subscription', 'AbortError')).toBe('Safari не создал системную push-подписку. Код: AbortError.')
   })
 })

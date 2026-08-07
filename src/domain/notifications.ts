@@ -7,6 +7,8 @@ export type NotificationPreferenceKind =
   | 'bedtime'
   | 'unfinished_homework_parent'
 
+export type PushEnableStage = 'permission' | 'service-worker' | 'subscription' | 'server'
+
 export type NotificationPreference = {
   kind: NotificationPreferenceKind
   enabled: boolean
@@ -48,6 +50,23 @@ export function urlBase64ToUint8Array(value: string) {
   const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/')
   const raw = globalThis.atob(base64)
   return Uint8Array.from(raw, (character) => character.charCodeAt(0))
+}
+
+export function safePushErrorCode(error: unknown) {
+  if (!error || typeof error !== 'object') return 'unknown'
+  const candidate = error as { code?: unknown; name?: unknown }
+  for (const value of [candidate.code, candidate.name]) {
+    if (typeof value === 'string' && /^[A-Za-z0-9_-]{1,48}$/.test(value)) return value
+  }
+  return 'unknown'
+}
+
+export function pushEnableFailureMessage(stage: PushEnableStage, code: string) {
+  const suffix = code === 'unknown' ? '' : ` Код: ${code}.`
+  if (stage === 'permission') return `Браузер не выдал разрешение на уведомления.${suffix}`
+  if (stage === 'service-worker') return `Не удалось подготовить приложение к уведомлениям.${suffix}`
+  if (stage === 'subscription') return `Safari не создал системную push-подписку.${suffix}`
+  return `Сервер не сохранил подписку этого устройства.${suffix}`
 }
 
 export function samaraDateTimeParts(date: Date) {

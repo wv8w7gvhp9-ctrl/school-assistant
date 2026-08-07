@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { urlBase64ToUint8Array } from '../domain/notifications'
+import { pushEnableFailureMessage, safePushErrorCode, urlBase64ToUint8Array, type PushEnableStage } from '../domain/notifications'
 import { supabase, vapidPublicKey } from '../lib/supabase'
 import { useOnlineStatus } from './NetworkStatus'
 
@@ -101,19 +101,23 @@ export function PushNotificationSettings({ role, onChanged }: { role: 'parent' |
     if (!online || !vapidPublicKey) return
     setState('enabling')
     setMessage('')
+    let stage: PushEnableStage = 'permission'
     try {
       const permission = await Notification.requestPermission()
       if (permission !== 'granted') {
         setState(permission === 'denied' ? 'denied' : 'idle')
         return
       }
+      stage = 'service-worker'
       const registration = await navigator.serviceWorker.ready
+      stage = 'subscription'
       const existing = await registration.pushManager.getSubscription()
       const subscription = existing ?? await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
       })
       try {
+        stage = 'server'
         await saveSubscription(subscription)
       } catch (error) {
         if (!existing) await subscription.unsubscribe()
@@ -122,9 +126,10 @@ export function PushNotificationSettings({ role, onChanged }: { role: 'parent' |
       setState('enabled')
       setMessage('Уведомления включены на этом устройстве.')
       onChanged?.()
-    } catch {
+    } catch (error) {
+      console.error(`Push enable failed at ${stage}`, error)
       setState('error')
-      setMessage('Не удалось включить уведомления. Проверьте интернет и повторите попытку.')
+      setMessage(pushEnableFailureMessage(stage, safePushErrorCode(error)))
     }
   }
 
