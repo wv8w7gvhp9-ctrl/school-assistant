@@ -1,0 +1,27 @@
+-- Сначала замените два значения в угловых скобках. Не сохраняйте заполненный
+-- файл в Git. CRON_SECRET должен совпадать с секретом Edge Function.
+
+create extension if not exists pg_cron;
+create extension if not exists pg_net with schema extensions;
+
+select vault.create_secret('<PROJECT_URL>', 'school_assistant_project_url');
+select vault.create_secret('<CRON_SECRET>', 'school_assistant_push_cron_secret');
+
+select cron.unschedule(jobid)
+from cron.job
+where jobname = 'school-assistant-dispatch-push';
+
+select cron.schedule(
+  'school-assistant-dispatch-push',
+  '* * * * *',
+  $$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'school_assistant_project_url') || '/functions/v1/dispatch-push',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'school_assistant_push_cron_secret')
+    ),
+    body := jsonb_build_object('invoked_at', now())
+  ) as request_id;
+  $$
+);

@@ -6,6 +6,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'autoUpdate',
       manifest: {
         name: 'Школьный помощник',
@@ -15,6 +18,7 @@ export default defineConfig({
         background_color: '#FBF8FB',
         display: 'standalone',
         lang: 'ru',
+        id: '/',
         scope: '/',
         start_url: '/',
         icons: [
@@ -38,7 +42,6 @@ export default defineConfig({
           },
         ],
       },
-      workbox: { navigateFallback: '/index.html' },
     }),
   ],
 })

@@ -181,3 +181,35 @@ p { color: var(--color-text-muted); font-size: 16px; line-height: 1.5; }
 .status-chip.pending_sync { color: var(--color-offline); background: var(--color-surface-strong); }
 @media (max-width: 374px) { .offline-banner { align-items: flex-start; flex-direction: column; } }
 @media (max-width: 374px) { .sync-banner { align-items: flex-start; flex-direction: column; } }
+
+/* Push-уведомления: настройки родителя и состояние устройства ребёнка. */
+.parent-notifications { display: grid; gap: var(--space-4); margin-top: var(--space-5); padding-top: var(--space-5); border-top: 1px solid var(--color-border); }
+.parent-notifications h2, .parent-notifications h3, .child-notifications h3 { margin: 0; }
+.parent-notifications h3 { margin-top: var(--space-2); font-size: 18px; }
+.push-device-control { display: grid; gap: var(--space-3); }
+.notification-banner { display: grid; gap: var(--space-1); margin: 0; padding: var(--space-3) var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-lg); color: var(--color-text); background: var(--color-surface-subtle); }
+.notification-banner span { color: var(--color-text-muted); font-size: 14px; }
+.notification-banner.success { border-color: var(--color-success); background: var(--color-success-soft); }
+.notification-banner.warning { border-color: var(--color-warning); background: var(--color-warning-soft); }
+.notification-banner.info { border-color: var(--color-info); background: var(--color-info-soft); }
+.notification-banner.error { border-color: var(--color-danger); background: var(--color-danger-soft); }
+.push-device-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-3); }
+.push-device-actions .text-button { min-height: 48px; justify-content: center; }
+.notification-preference-list { display: grid; gap: var(--space-3); }
+.notification-preference-row { display: grid; grid-template-columns: minmax(0, 1fr) 132px; align-items: end; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-subtle); }
+.notification-preference-row .switch-row { min-width: 0; }
+.notification-preference-row .switch-row span { display: grid; gap: var(--space-1); min-width: 0; }
+.notification-preference-row .switch-row small { color: var(--color-text-muted); font-size: 13px; }
+.notification-preference-row > label:last-child { display: grid; gap: var(--space-2); color: var(--color-text); font-weight: 700; }
+.notification-preference-row input[type="time"] { width: 100%; min-height: 48px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); color: var(--color-text); background: var(--color-surface); }
+.push-device-list { display: grid; gap: var(--space-2); }
+.push-device-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 64px; padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-subtle); }
+.push-device-row > div { display: grid; gap: var(--space-1); min-width: 0; }
+.push-device-row span { color: var(--color-text-muted); font-size: 13px; overflow-wrap: anywhere; }
+.push-device-row .text-button { min-height: 44px; color: var(--color-danger); }
+.profile-sheet { width: min(100%, 680px); max-height: 92dvh; margin: 0 auto; padding: var(--space-5) var(--space-5) calc(var(--space-6) + env(safe-area-inset-bottom)); overflow-y: auto; border: 1px solid var(--color-border); border-radius: var(--radius-xl) var(--radius-xl) 0 0; background: var(--color-surface); box-shadow: var(--shadow-raised); }
+.profile-sheet h2 { margin-top: var(--space-1); }
+.child-notifications { display: grid; gap: var(--space-3); margin-top: var(--space-6); padding-top: var(--space-5); border-top: 1px solid var(--color-border); }
+.child-notifications > p { color: var(--color-text-muted); }
+@media (max-width: 520px) { .notification-preference-row { grid-template-columns: 1fr; }.push-device-actions { grid-template-columns: 1fr; }.push-device-row { align-items: flex-start; flex-direction: column; }.push-device-row .text-button { min-height: 48px; } }
+@media (min-width: 768px) { .profile-sheet { max-height: 88dvh; border-radius: var(--radius-xl); } }
