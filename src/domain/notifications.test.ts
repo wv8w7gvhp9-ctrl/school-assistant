@@ -36,6 +36,7 @@ describe('планирование уведомлений', () => {
   it('передаёт Safari стандартный Base64URL VAPID-ключ без собственного декодирования', () => {
     const key = `B${'a'.repeat(85)}_`
     expect(normalizeVapidPublicKey(`  ${key}  `)).toBe(key)
+    expect(normalizeVapidPublicKey(`VAPID_PUBLIC_KEY=${key}`)).toBe(key)
     expect(normalizeVapidPublicKey(`${key}=`)).toBeNull()
     expect(normalizeVapidPublicKey(`B${'a'.repeat(84)}+_`)).toBeNull()
   })

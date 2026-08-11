@@ -46,7 +46,7 @@ export function normalizeNotificationTime(value: string) {
 }
 
 export function normalizeVapidPublicKey(value: string) {
-  const normalized = value.trim()
+  const normalized = value.trim().replace(/^VAPID_PUBLIC_KEY\s*=\s*/, '').trim()
   return /^[A-Za-z0-9_-]{87}$/.test(normalized) ? normalized : null
 }
 
