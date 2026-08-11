@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   defaultNotificationPreferences,
+  normalizeVapidPublicKey,
   normalizeNotificationTime,
   notificationEventKey,
   pushEnableFailureMessage,
   safePushErrorCode,
   samaraDateTimeParts,
-  urlBase64ToArrayBuffer,
 } from './notifications'
 
 describe('планирование уведомлений', () => {
@@ -33,10 +33,11 @@ describe('планирование уведомлений', () => {
     expect(normalizeNotificationTime('24:10')).toBeNull()
   })
 
-  it('передаёт публичный VAPID-ключ как отдельный ArrayBuffer для Safari', () => {
-    const buffer = urlBase64ToArrayBuffer('AQIDBA')
-    expect(buffer).toBeInstanceOf(ArrayBuffer)
-    expect([...new Uint8Array(buffer)]).toEqual([1, 2, 3, 4])
+  it('передаёт Safari стандартный Base64URL VAPID-ключ без собственного декодирования', () => {
+    const key = `B${'a'.repeat(85)}_`
+    expect(normalizeVapidPublicKey(`  ${key}  `)).toBe(key)
+    expect(normalizeVapidPublicKey(`${key}=`)).toBeNull()
+    expect(normalizeVapidPublicKey(`B${'a'.repeat(84)}+_`)).toBeNull()
   })
 
   it('показывает безопасный этап и код ошибки push без технического текста', () => {
@@ -44,5 +45,6 @@ describe('планирование уведомлений', () => {
     expect(safePushErrorCode({ code: '42501', message: 'private server detail' })).toBe('42501')
     expect(safePushErrorCode({ code: 'unsafe code with spaces' })).toBe('unknown')
     expect(pushEnableFailureMessage('subscription', 'AbortError')).toBe('Safari не создал системную push-подписку. Код: AbortError.')
+    expect(pushEnableFailureMessage('existing-subscription', 'InvalidCharacterError')).toBe('Safari не смог проверить прежнюю push-подписку. Код: InvalidCharacterError.')
   })
 })

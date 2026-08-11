@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { pushEnableFailureMessage, safePushErrorCode, urlBase64ToArrayBuffer, type PushEnableStage } from '../domain/notifications'
+import { normalizeVapidPublicKey, pushEnableFailureMessage, safePushErrorCode, type PushEnableStage } from '../domain/notifications'
 import { supabase, vapidPublicKey } from '../lib/supabase'
 import { useOnlineStatus } from './NetworkStatus'
 
@@ -59,7 +59,7 @@ export function PushNotificationSettings({ role, onChanged }: { role: 'parent' |
       setState('install_required')
       return
     }
-    if (!vapidPublicKey) {
+    if (!vapidPublicKey || !normalizeVapidPublicKey(vapidPublicKey)) {
       setState('not_configured')
       return
     }
@@ -99,6 +99,11 @@ export function PushNotificationSettings({ role, onChanged }: { role: 'parent' |
 
   async function enable() {
     if (!online || !vapidPublicKey) return
+    const applicationServerKey = normalizeVapidPublicKey(vapidPublicKey)
+    if (!applicationServerKey) {
+      setState('not_configured')
+      return
+    }
     setState('enabling')
     setMessage('')
     let stage: PushEnableStage = 'permission'
@@ -110,11 +115,12 @@ export function PushNotificationSettings({ role, onChanged }: { role: 'parent' |
       }
       stage = 'service-worker'
       const registration = await navigator.serviceWorker.ready
-      stage = 'subscription'
+      stage = 'existing-subscription'
       const existing = await registration.pushManager.getSubscription()
+      stage = 'subscription'
       const subscription = existing ?? await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToArrayBuffer(vapidPublicKey),
+        applicationServerKey,
       })
       try {
         stage = 'server'

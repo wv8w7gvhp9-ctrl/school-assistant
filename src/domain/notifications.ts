@@ -7,7 +7,7 @@ export type NotificationPreferenceKind =
   | 'bedtime'
   | 'unfinished_homework_parent'
 
-export type PushEnableStage = 'permission' | 'service-worker' | 'subscription' | 'server'
+export type PushEnableStage = 'permission' | 'service-worker' | 'existing-subscription' | 'subscription' | 'server'
 
 export type NotificationPreference = {
   kind: NotificationPreferenceKind
@@ -45,12 +45,9 @@ export function normalizeNotificationTime(value: string) {
   return `${match[1]}:${match[2]}`
 }
 
-export function urlBase64ToArrayBuffer(value: string) {
-  const padding = '='.repeat((4 - value.length % 4) % 4)
-  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/')
-  const raw = globalThis.atob(base64)
-  const bytes = Uint8Array.from(raw, (character) => character.charCodeAt(0))
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+export function normalizeVapidPublicKey(value: string) {
+  const normalized = value.trim()
+  return /^[A-Za-z0-9_-]{87}$/.test(normalized) ? normalized : null
 }
 
 export function safePushErrorCode(error: unknown) {
@@ -66,6 +63,7 @@ export function pushEnableFailureMessage(stage: PushEnableStage, code: string) {
   const suffix = code === 'unknown' ? '' : ` Код: ${code}.`
   if (stage === 'permission') return `Браузер не выдал разрешение на уведомления.${suffix}`
   if (stage === 'service-worker') return `Не удалось подготовить приложение к уведомлениям.${suffix}`
+  if (stage === 'existing-subscription') return `Safari не смог проверить прежнюю push-подписку.${suffix}`
   if (stage === 'subscription') return `Safari не создал системную push-подписку.${suffix}`
   return `Сервер не сохранил подписку этого устройства.${suffix}`
 }
