@@ -1,6 +1,19 @@
 import { useEffect, useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
-import { parseThings, schoolYearDefaults, validateLessonDraft, validateOptionalTimeRange } from '../domain/schedule'
+import {
+  formatNonSchoolPeriod,
+  groupNonSchoolDays,
+  nonSchoolReasonLabels,
+  parseThings,
+  schoolYearDefaults,
+  validateLessonDraft,
+  validateNonSchoolPeriod,
+  validateOptionalTimeRange,
+  type NonSchoolDay,
+  type NonSchoolPeriod,
+  type NonSchoolReason,
+} from '../domain/schedule'
 import { supabase } from '../lib/supabase'
+import { useOnlineStatus } from './NetworkStatus'
 
 type AcademicYear = { id: string; starts_on: string; ends_on: string }
 type WeeklyLesson = {
@@ -41,6 +54,14 @@ function localTime(value: string) {
   return value.slice(0, 5)
 }
 
+function currentSamaraIsoDate() {
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: 'Europe/Samara', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date())
+  const value = (kind: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === kind)?.value ?? ''
+  return `${value('year')}-${value('month')}-${value('day')}`
+}
+
 function LessonFields({ draft, setDraft }: { draft: EditorLessonDraft; setDraft: Dispatch<SetStateAction<EditorLessonDraft>> }) {
   return <>
     <label htmlFor="lesson-subject">Предмет</label>
@@ -54,6 +75,7 @@ function LessonFields({ draft, setDraft }: { draft: EditorLessonDraft; setDraft:
 }
 
 export function ParentScheduleEditor({ familyId }: { familyId: string }) {
+  const online = useOnlineStatus()
   const defaults = useMemo(() => schoolYearDefaults(), [])
   const [years, setYears] = useState<AcademicYear[]>([])
   const [selectedYearId, setSelectedYearId] = useState('')
@@ -75,6 +97,11 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
   const [savingCancellation, setSavingCancellation] = useState(false)
   const [exceptionKind, setExceptionKind] = useState<'cancelled' | 'replacement'>('cancelled')
   const [replacementDraft, setReplacementDraft] = useState({ subject: '', startsAt: '', endsAt: '', things: '' })
+  const [nonSchoolDays, setNonSchoolDays] = useState<NonSchoolDay[]>([])
+  const [nonSchoolDraft, setNonSchoolDraft] = useState<{ reason: NonSchoolReason; startsOn: string; endsOn: string }>({ reason: 'vacation', startsOn: '', endsOn: '' })
+  const [savingNonSchoolPeriod, setSavingNonSchoolPeriod] = useState(false)
+  const [periodPendingDeletion, setPeriodPendingDeletion] = useState<NonSchoolPeriod | null>(null)
+  const [deletingNonSchoolPeriod, setDeletingNonSchoolPeriod] = useState(false)
 
   const loadYears = async () => {
     const client = supabase
@@ -109,6 +136,20 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
     setLessons((data ?? []) as unknown as WeeklyLesson[])
   }
 
+  const loadNonSchoolDays = async (year: AcademicYear) => {
+    const client = supabase
+    if (!client) return
+    const { data, error: requestError } = await client
+      .from('non_school_days')
+      .select('day, reason')
+      .eq('family_id', familyId)
+      .gte('day', year.starts_on)
+      .lte('day', year.ends_on)
+      .order('day')
+    if (requestError) throw requestError
+    setNonSchoolDays((data ?? []) as NonSchoolDay[])
+  }
+
   useEffect(() => {
     let active = true
     setLoading(true)
@@ -121,12 +162,22 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
     return () => { active = false }
   }, [familyId])
 
+  const selectedYear = years.find((year) => year.id === selectedYearId)
+
   useEffect(() => {
-    if (!selectedYearId) return
+    if (!selectedYear) return
     setLoading(true)
-    void loadLessons(selectedYearId).catch(() => {
-      setError('Не удалось загрузить уроки. Проверьте интернет и попробуйте ещё раз.')
+    void Promise.all([loadLessons(selectedYear.id), loadNonSchoolDays(selectedYear)]).catch(() => {
+      setError('Не удалось загрузить уроки и неучебные дни. Проверьте интернет и попробуйте ещё раз.')
     }).finally(() => setLoading(false))
+  }, [selectedYearId, years])
+
+  useEffect(() => {
+    if (!selectedYear) return
+    const today = currentSamaraIsoDate()
+    const initialDay = today >= selectedYear.starts_on && today <= selectedYear.ends_on ? today : selectedYear.starts_on
+    setNonSchoolDraft({ reason: 'vacation', startsOn: initialDay, endsOn: initialDay })
+    setPeriodPendingDeletion(null)
   }, [selectedYearId])
 
   async function createYear(event: FormEvent<HTMLFormElement>) {
@@ -299,7 +350,75 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
     setMessage(exceptionKind === 'cancelled' ? 'Отмена урока на выбранную дату сохранена.' : 'Замена урока на выбранную дату сохранена.')
   }
 
-  const selectedYear = years.find((year) => year.id === selectedYearId)
+  async function saveNonSchoolPeriod(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!supabase || !selectedYear || savingNonSchoolPeriod) return
+    const validationError = validateNonSchoolPeriod(nonSchoolDraft, selectedYear)
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+    if (!online) {
+      setError('Не удалось сохранить без интернета. Подключитесь к сети и попробуйте ещё раз.')
+      return
+    }
+    setSavingNonSchoolPeriod(true)
+    setError('')
+    setMessage('')
+    const { error: saveError } = await supabase.rpc('save_non_school_period', {
+      input_academic_year_id: selectedYear.id,
+      input_starts_on: nonSchoolDraft.startsOn,
+      input_ends_on: nonSchoolDraft.endsOn,
+      input_reason: nonSchoolDraft.reason,
+    })
+    setSavingNonSchoolPeriod(false)
+    if (saveError) {
+      setError(saveError.code === '23505'
+        ? 'Часть этого периода уже отмечена другим типом. Сначала удалите прежнюю запись.'
+        : saveError.code === '22023'
+          ? 'Проверьте даты: период должен находиться внутри учебного года.'
+          : 'Не удалось сохранить неучебные дни. Проверьте интернет и попробуйте ещё раз.')
+      return
+    }
+    try {
+      await loadNonSchoolDays(selectedYear)
+      setMessage('Запись добавлена в календарь.')
+    } catch {
+      setError('Запись сохранена, но список не обновился. Проверьте интернет и откройте страницу снова.')
+    }
+  }
+
+  async function deleteNonSchoolPeriod() {
+    if (!supabase || !selectedYear || !periodPendingDeletion || deletingNonSchoolPeriod) return
+    if (!online) {
+      setError('Не удалось удалить без интернета. Подключитесь к сети и попробуйте ещё раз.')
+      return
+    }
+    setDeletingNonSchoolPeriod(true)
+    setError('')
+    setMessage('')
+    const { data, error: deleteError } = await supabase.rpc('delete_non_school_period', {
+      input_academic_year_id: selectedYear.id,
+      input_starts_on: periodPendingDeletion.startsOn,
+      input_ends_on: periodPendingDeletion.endsOn,
+      input_reason: periodPendingDeletion.reason,
+    })
+    setDeletingNonSchoolPeriod(false)
+    if (deleteError) {
+      setError('Не удалось удалить запись. Проверьте интернет и попробуйте ещё раз.')
+      return
+    }
+    const deletedDays = Number((data as { deleted_days: number }[] | null)?.[0]?.deleted_days ?? 0)
+    setPeriodPendingDeletion(null)
+    try {
+      await loadNonSchoolDays(selectedYear)
+      setMessage(deletedDays > 0 ? 'Неучебные дни удалены из календаря.' : 'Эта запись уже была удалена.')
+    } catch {
+      setError('Запись удалена, но список не обновился. Проверьте интернет и откройте страницу снова.')
+    }
+  }
+
+  const nonSchoolPeriods = groupNonSchoolDays(nonSchoolDays)
 
   return <section className="parent-schedule" aria-labelledby="parent-schedule-title">
     <div className="parent-section-heading"><div><p className="eyebrow">Для родителя</p><h2 id="parent-schedule-title">Недельное расписание</h2></div></div>
@@ -337,6 +456,29 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
         {exceptionKind === 'replacement' && <><label htmlFor="replacement-subject">Новый предмет</label><input id="replacement-subject" type="text" maxLength={80} value={replacementDraft.subject} onChange={(event) => setReplacementDraft((current) => ({ ...current, subject: event.target.value }))} placeholder="Например, Математика" required /><div className="parent-form-grid"><div><label htmlFor="replacement-start">Новое начало</label><input id="replacement-start" type="time" value={replacementDraft.startsAt} onChange={(event) => setReplacementDraft((current) => ({ ...current, startsAt: event.target.value }))} /></div><div><label htmlFor="replacement-end">Новое окончание</label><input id="replacement-end" type="time" value={replacementDraft.endsAt} onChange={(event) => setReplacementDraft((current) => ({ ...current, endsAt: event.target.value }))} /></div></div><label htmlFor="replacement-things">Что взять для замены</label><input id="replacement-things" type="text" value={replacementDraft.things} onChange={(event) => setReplacementDraft((current) => ({ ...current, things: event.target.value }))} placeholder="Можно оставить пустым" /></>}
         <button className="secondary-button" type="submit" disabled={savingCancellation || !cancellationLessonId}>{savingCancellation ? 'Сохраняем…' : exceptionKind === 'cancelled' ? 'Отменить урок на дату' : 'Сохранить замену'}</button>
       </form>}
+      {selectedYear && <section className="parent-calendar-section" aria-labelledby="non-school-title">
+        <form className="parent-exception-form" onSubmit={saveNonSchoolPeriod}>
+          <h3 id="non-school-title">Каникулы и неучебные дни</h3>
+          <p>В эти даты уроки не показываются, а рюкзак будет собран на ближайший фактический учебный день.</p>
+          {!online && <p className="auth-message warning" role="status">Сейчас нет интернета. Сохранение и удаление будут доступны после подключения.</p>}
+          <label htmlFor="non-school-reason">Тип</label>
+          <select id="non-school-reason" className="parent-select" value={nonSchoolDraft.reason} onChange={(event) => setNonSchoolDraft((current) => ({ ...current, reason: event.target.value as NonSchoolReason }))}>
+            <option value="vacation">Каникулы</option>
+            <option value="holiday">Праздник</option>
+            <option value="weekend_override">Выходной</option>
+          </select>
+          <div className="parent-form-grid"><div><label htmlFor="non-school-start">Начало</label><input id="non-school-start" type="date" min={selectedYear.starts_on} max={selectedYear.ends_on} value={nonSchoolDraft.startsOn} onChange={(event) => setNonSchoolDraft((current) => ({ ...current, startsOn: event.target.value, endsOn: current.endsOn < event.target.value ? event.target.value : current.endsOn }))} required /></div><div><label htmlFor="non-school-end">Окончание</label><input id="non-school-end" type="date" min={nonSchoolDraft.startsOn || selectedYear.starts_on} max={selectedYear.ends_on} value={nonSchoolDraft.endsOn} onChange={(event) => setNonSchoolDraft((current) => ({ ...current, endsOn: event.target.value }))} required /></div></div>
+          <button className="secondary-button" type="submit" disabled={savingNonSchoolPeriod || !online}>{savingNonSchoolPeriod ? 'Сохраняем…' : 'Добавить в календарь'}</button>
+        </form>
+        <div className="parent-non-school-list" aria-live="polite">
+          <h3>Сохранённые даты</h3>
+          {nonSchoolPeriods.length === 0 ? <p className="parent-empty">Каникулы и неучебные дни ещё не добавлены.</p> : nonSchoolPeriods.map((period) => <article className="parent-non-school-row" key={`${period.reason}-${period.startsOn}-${period.endsOn}`}>
+            <div><strong>{nonSchoolReasonLabels[period.reason]}</strong><p>{formatNonSchoolPeriod(period)}</p></div>
+            <button type="button" onClick={() => setPeriodPendingDeletion(period)} disabled={deletingNonSchoolPeriod || !online}>Удалить</button>
+            {periodPendingDeletion?.reason === period.reason && periodPendingDeletion.startsOn === period.startsOn && periodPendingDeletion.endsOn === period.endsOn && <section className="parent-confirm" role="alert"><strong>Удалить запись «{nonSchoolReasonLabels[period.reason].toLowerCase()}»?</strong><p>В эти даты снова будет действовать обычное недельное расписание.</p><div><button className="secondary-button" type="button" onClick={() => setPeriodPendingDeletion(null)} disabled={deletingNonSchoolPeriod}>Отмена</button><button className="danger-button" type="button" onClick={() => void deleteNonSchoolPeriod()} disabled={deletingNonSchoolPeriod}>{deletingNonSchoolPeriod ? 'Удаляем…' : 'Удалить'}</button></div></section>}
+          </article>)}
+        </div>
+      </section>}
       <div className="parent-lessons" aria-live="polite">
         <h3>Сохранённые уроки</h3>
         {lessons.length === 0 ? <p className="parent-empty">В этом учебном году уроков ещё нет.</p> : weekdays.map((day) => {

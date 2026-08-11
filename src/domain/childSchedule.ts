@@ -8,6 +8,23 @@ export type CloudLesson = {
   status: 'regular' | 'cancelled' | 'replacement' | 'extra'
 }
 
+export type SchoolDayReason = 'weekend_override' | 'holiday' | 'vacation'
+
+export type SchoolDayStatus = {
+  is_school_day: boolean
+  reason: SchoolDayReason | null
+}
+
+export const schoolDayMessages: Record<SchoolDayReason, { title: string; description: string }> = {
+  weekend_override: { title: 'Сегодня выходной', description: 'Уроков нет. Можно отдохнуть и почитать.' },
+  holiday: { title: 'Сегодня праздник', description: 'Уроков нет. Хорошего праздника!' },
+  vacation: { title: 'Сейчас каникулы', description: 'Уроков нет. Приятного отдыха!' },
+}
+
+export function schoolDayMessage(reason: SchoolDayReason | null | undefined) {
+  return reason ? schoolDayMessages[reason] : null
+}
+
 export function isoDateForWeekday(todayIso: string, todayWeekday: number, weekday: number): string {
   const date = new Date(`${todayIso}T00:00:00Z`)
   date.setUTCDate(date.getUTCDate() + weekday - todayWeekday)

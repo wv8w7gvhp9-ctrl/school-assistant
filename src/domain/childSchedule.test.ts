@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isoDateForWeekday, mondayFirstWeekday, timeRange } from './childSchedule'
+import { isoDateForWeekday, mondayFirstWeekday, schoolDayMessage, timeRange } from './childSchedule'
 
 describe('детское расписание', () => {
   it('переносит воскресенье на понедельник для выбора расписания', () => {
@@ -16,5 +16,9 @@ describe('детское расписание', () => {
 
   it('вычисляет дату выбранного учебного дня на следующей неделе', () => {
     expect(isoDateForWeekday('2026-08-05', 3, 8)).toBe('2026-08-10')
+  })
+
+  it('объясняет ребёнку каникулы без технических терминов', () => {
+    expect(schoolDayMessage('vacation')).toEqual({ title: 'Сейчас каникулы', description: 'Уроков нет. Приятного отдыха!' })
   })
 })

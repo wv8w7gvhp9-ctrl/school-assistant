@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { CloudLesson } from '../domain/childSchedule'
+import { schoolDayMessage, type CloudLesson, type SchoolDayStatus } from '../domain/childSchedule'
 import { clubTimeRange, type ClubOccurrence } from '../domain/clubs'
 import { samaraIsoDate, type CloudHomeworkAssignment } from '../domain/homework'
 import { activeTodayClubs, activeTodayLessons, actionableTodayHomework, backpackProgress, formatFullRussianDate, type BackpackItem, type BackpackStatus } from '../domain/today'
@@ -30,6 +30,7 @@ export function CloudToday() {
   const online = useOnlineStatus()
   const today = useMemo(samaraIsoDate, [])
   const [lessons, setLessons] = useState<CloudLesson[]>([])
+  const [schoolDayStatus, setSchoolDayStatus] = useState<SchoolDayStatus | null>(null)
   const [homework, setHomework] = useState<CloudHomeworkAssignment[]>([])
   const [clubs, setClubs] = useState<ClubOccurrence[]>([])
   const [backpack, setBackpack] = useState<BackpackItem[]>([])
@@ -63,8 +64,9 @@ export function CloudToday() {
   async function loadToday() {
     if (!supabase || !profile) return
     setState('loading')
-    const [lessonResult, homeworkResult, clubResult, backpackResult, starResult, pendingBackpackMutations] = await Promise.all([
+    const [lessonResult, schoolDayResult, homeworkResult, clubResult, backpackResult, starResult, pendingBackpackMutations] = await Promise.all([
       loadWithOfflineFallback<CloudLesson[]>(offlineKey.schedule(profile.childId, today), () => supabase!.rpc('get_my_schedule_for_date', { input_day: today }), online),
+      loadWithOfflineFallback<SchoolDayStatus[]>(offlineKey.schoolDayStatus(profile.childId, today), () => supabase!.rpc('get_my_school_day_status', { input_day: today }), online),
       loadWithOfflineFallback<CloudHomeworkAssignment[]>(offlineKey.homework(profile.childId), () => supabase!.rpc('get_my_homework_v2'), online),
       loadWithOfflineFallback<ClubOccurrence[]>(offlineKey.clubOccurrences(profile.childId, today, today), () => supabase!.rpc('get_my_club_occurrences', { input_from: today, input_to: today }), online),
       loadWithOfflineFallback<BackpackResponseRow[]>(offlineKey.backpack(profile.childId), () => supabase!.rpc('get_my_backpack_v2'), online),
@@ -80,6 +82,8 @@ export function CloudToday() {
       return
     }
     setLessons(lessonResult.data ?? [])
+    setSchoolDayStatus(schoolDayResult.source === 'none' ? null : schoolDayResult.data?.[0] ?? null)
+    if (schoolDayResult.source === 'none') console.warn('Не удалось загрузить статус учебного дня', schoolDayResult.error)
     setHomework(homeworkResult.data ?? [])
     setClubs(clubResult.data ?? [])
     if (backpackResult.source === 'none') {
@@ -121,7 +125,7 @@ export function CloudToday() {
     setSubmissionQueued(pendingBackpackMutations.some((mutation) => mutation.kind === 'submit_backpack'))
     if (starResult.source === 'none') console.error('Не удалось загрузить число звёзд', starResult.error)
     setStars(starResult.source === 'none' ? 0 : Number(starResult.data ?? 0))
-    const cachedResult = [lessonResult, homeworkResult, clubResult, backpackResult, starResult].find((result) => result.source === 'cache')
+    const cachedResult = [lessonResult, schoolDayResult, homeworkResult, clubResult, backpackResult, starResult].find((result) => result.source === 'cache')
     setCachedAt(cachedResult?.savedAt ?? null)
     setState('ready')
   }
@@ -158,6 +162,7 @@ export function CloudToday() {
   const progress = backpackProgress(backpack)
   const firstLesson = todayLessons[0]
   const firstClub = todayClubs[0]
+  const nonSchoolMessage = schoolDayMessage(schoolDayStatus?.reason)
 
   async function toggleItem(item: BackpackItem) {
     if (!profile || busyItemId || backpackMeta?.status !== 'packing' || submissionQueued) return
@@ -220,9 +225,9 @@ export function CloudToday() {
     {state === 'loading' && <p className="child-cloud-state" role="status">Собираем твой сегодняшний день…</p>}
     {state === 'error' && <div className="auth-message error" role="alert"><p>{online ? 'Не получилось загрузить сегодняшний день. Попробуй ещё раз.' : 'Сегодняшний день ещё не был сохранён на этом устройстве.'}</p><button type="button" className="secondary-button" onClick={() => void loadToday()}>Повторить</button></div>}
     {state === 'ready' && <>
-      <article className="hero-card"><div><p className="eyebrow">{firstLesson ? 'Ближайшее событие' : firstClub ? 'После уроков' : 'Спокойный день'}</p><h2>{firstLesson ? `Первый урок в ${firstLesson.starts_at.slice(0, 5)}` : firstClub ? `${firstClub.title} в ${firstClub.starts_at.slice(0, 5)}` : 'Сегодня без занятий'}</h2><p>{firstLesson ? `${firstLesson.subject_title} · Сегодня всё получится` : firstClub ? 'Не забудь вещи с собой' : backpackMeta ? `Рюкзак собираем на ${formatFullRussianDate(backpackMeta.day).toLowerCase()}` : 'Можно отдохнуть и почитать'}</p></div><div className="hero-icon" aria-hidden="true"><Icon name={firstLesson ? 'sun' : firstClub ? 'clubs' : 'books'} /></div></article>
+      <article className="hero-card"><div><p className="eyebrow">{firstLesson ? 'Ближайшее событие' : firstClub ? 'После уроков' : nonSchoolMessage ? 'Неучебный день' : 'Спокойный день'}</p><h2>{firstLesson ? `Первый урок в ${firstLesson.starts_at.slice(0, 5)}` : firstClub ? `${firstClub.title} в ${firstClub.starts_at.slice(0, 5)}` : nonSchoolMessage?.title ?? 'Сегодня без занятий'}</h2><p>{firstLesson ? `${firstLesson.subject_title} · Сегодня всё получится` : firstClub ? 'Не забудь вещи с собой' : nonSchoolMessage ? `${nonSchoolMessage.description}${backpackMeta ? ` Рюкзак собираем на ${formatFullRussianDate(backpackMeta.day).toLowerCase()}.` : ''}` : backpackMeta ? `Рюкзак собираем на ${formatFullRussianDate(backpackMeta.day).toLowerCase()}` : 'Можно отдохнуть и почитать'}</p></div><div className="hero-icon" aria-hidden="true"><Icon name={firstLesson ? 'sun' : firstClub ? 'clubs' : 'books'} /></div></article>
       <SectionTitle>Уроки сегодня</SectionTitle>
-      {todayLessons.length === 0 ? <div className="child-cloud-state compact"><strong>Уроков сегодня нет</strong><p>Следующий учебный день указан в рюкзаке.</p></div> : <div className="card lesson-list">{todayLessons.map((lesson) => <div className="lesson-row" key={`${lesson.lesson_order}-${lesson.starts_at}`}><time>{lesson.starts_at.slice(0, 5)}</time><span className="subject-dot math" /><div><strong>{lesson.subject_title}</strong>{lesson.things.length > 0 && <p>{lesson.things.join(' · ')}</p>}</div></div>)}</div>}
+      {todayLessons.length === 0 ? <div className={`child-cloud-state compact ${nonSchoolMessage ? 'non-school-state' : ''}`}><strong>{nonSchoolMessage?.title ?? 'Уроков сегодня нет'}</strong><p>{backpackMeta ? `Следующий учебный день — ${formatFullRussianDate(backpackMeta.day).toLowerCase()}.` : 'Следующий учебный день пока не найден.'}</p></div> : <div className="card lesson-list">{todayLessons.map((lesson) => <div className="lesson-row" key={`${lesson.lesson_order}-${lesson.starts_at}`}><time>{lesson.starts_at.slice(0, 5)}</time><span className="subject-dot math" /><div><strong>{lesson.subject_title}</strong>{lesson.things.length > 0 && <p>{lesson.things.join(' · ')}</p>}</div></div>)}</div>}
       {todayClubs.length > 0 && <><SectionTitle>После уроков</SectionTitle>{todayClubs.map((club) => <article className="card club-summary" key={`${club.club_id}-${club.starts_at}`}><span className="club-icon"><Icon name="clubs" /></span><div><strong>{club.title}</strong><p>{clubTimeRange(club.starts_at, club.ends_at)}</p></div></article>)}</>}
       <SectionTitle>Домашка</SectionTitle>
       {todayHomework.length === 0 ? <div className="child-cloud-state compact"><strong>Всё сделано</strong><p>На сегодня нет заданий, которые нужно выполнить.</p></div> : <div className="today-homework-list">{todayHomework.slice(0, 3).map((assignment) => <article className="card today-homework" key={assignment.id}><div><strong>{assignment.subject_title}</strong><p>{assignment.task}</p></div><StatusChip status={assignment.status} /></article>)}</div>}

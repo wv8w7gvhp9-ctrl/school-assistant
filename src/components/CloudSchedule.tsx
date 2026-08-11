@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { childWeekdays, isoDateForWeekday, mondayFirstWeekday, timeRange, type CloudLesson } from '../domain/childSchedule'
+import { childWeekdays, isoDateForWeekday, mondayFirstWeekday, schoolDayMessage, timeRange, type CloudLesson, type SchoolDayStatus } from '../domain/childSchedule'
 import { supabase } from '../lib/supabase'
 import { loadWithOfflineFallback, offlineKey } from '../lib/offlineCache'
 import { useChildSession } from './ChildSession'
@@ -23,6 +23,7 @@ export function CloudSchedule() {
   const [selectedDay, setSelectedDay] = useState(today.weekday > 5 ? 1 : today.weekday)
   const [weekOffset, setWeekOffset] = useState(0)
   const [lessons, setLessons] = useState<CloudLesson[]>([])
+  const [schoolDayStatus, setSchoolDayStatus] = useState<SchoolDayStatus | null>(null)
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [cachedAt, setCachedAt] = useState<string | null>(null)
   const selectedDate = isoDateForWeekday(today.iso, today.weekday, selectedDay + weekOffset * 7)
@@ -32,14 +33,19 @@ export function CloudSchedule() {
     if (!client || !profile) return
     let active = true
     setState('loading')
-    void loadWithOfflineFallback<CloudLesson[]>(offlineKey.schedule(profile.childId, selectedDate), () => client.rpc('get_my_schedule_for_date', { input_day: selectedDate }), online).then((result) => {
+    void Promise.all([
+      loadWithOfflineFallback<CloudLesson[]>(offlineKey.schedule(profile.childId, selectedDate), () => client.rpc('get_my_schedule_for_date', { input_day: selectedDate }), online),
+      loadWithOfflineFallback<SchoolDayStatus[]>(offlineKey.schoolDayStatus(profile.childId, selectedDate), () => client.rpc('get_my_school_day_status', { input_day: selectedDate }), online),
+    ]).then(([result, statusResult]) => {
       if (!active) return
       if (result.source === 'none') {
         setState('error')
         return
       }
       setLessons(result.data ?? [])
-      setCachedAt(result.source === 'cache' ? result.savedAt : null)
+      setSchoolDayStatus(statusResult.source === 'none' ? null : statusResult.data?.[0] ?? null)
+      if (statusResult.source === 'none') console.warn('Не удалось загрузить статус учебного дня', statusResult.error)
+      setCachedAt(result.source === 'cache' ? result.savedAt : statusResult.source === 'cache' ? statusResult.savedAt : null)
       setState('ready')
     })
     return () => { active = false }
@@ -48,6 +54,7 @@ export function CloudSchedule() {
   const dayLessons = lessons.filter((lesson) => lesson.weekday === selectedDay)
   const selected = childWeekdays.find((day) => day.value === selectedDay) ?? childWeekdays[0]
   const isToday = weekOffset === 0 && selectedDay === today.weekday
+  const nonSchoolMessage = schoolDayMessage(schoolDayStatus?.reason)
 
   return <section className="screen"><div className="screen-heading"><div><p className="eyebrow">Моя неделя</p><h1>Расписание</h1></div></div>
     <div className="week-picker" aria-label="Выберите неделю"><button type="button" className={weekOffset === 0 ? 'selected' : ''} onClick={() => setWeekOffset(0)}>Эта неделя</button><button type="button" className={weekOffset === 1 ? 'selected' : ''} onClick={() => setWeekOffset(1)}>Следующая</button></div>
@@ -56,7 +63,7 @@ export function CloudSchedule() {
     {cachedAt && <OfflineDataNote savedAt={cachedAt} />}
     {state === 'loading' && <p className="child-cloud-state" role="status">Загружаем твоё расписание…</p>}
     {state === 'error' && <p className="auth-message error" role="alert">{online ? 'Не получилось загрузить расписание. Попробуй ещё раз.' : 'Для этого дня ещё нет сохранённого расписания.'}</p>}
-    {state === 'ready' && dayLessons.length === 0 && <p className="child-cloud-state">На этот день уроков пока нет.</p>}
+    {state === 'ready' && dayLessons.length === 0 && <div className={`child-cloud-state ${nonSchoolMessage ? 'non-school-state' : ''}`}><strong>{nonSchoolMessage?.title ?? 'На этот день уроков пока нет'}</strong>{nonSchoolMessage && <p>{nonSchoolMessage.description}</p>}</div>}
     {state === 'ready' && dayLessons.length > 0 && <div className="timeline">{dayLessons.map((lesson) => <article className={`lesson-card ${lesson.status === 'cancelled' ? 'cancelled-lesson' : ''}`} key={`${lesson.weekday}-${lesson.lesson_order}`}><time>{timeRange(lesson)}</time><span className="timeline-dot" /><div><p className="eyebrow">{lesson.status === 'cancelled' ? 'Урок отменён' : lesson.status === 'replacement' ? 'Замена' : `Урок ${lesson.lesson_order}`}</p><h2>{lesson.subject_title}</h2></div>{lesson.status !== 'cancelled' && lesson.things.length > 0 && <p className="lesson-things">Взять: {lesson.things.join(' · ')}</p>}</article>)}</div>}
   </section>
 }
