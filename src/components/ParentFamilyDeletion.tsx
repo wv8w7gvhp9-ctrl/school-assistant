@@ -75,7 +75,7 @@ export function ParentFamilyDeletion({ childId, childName, onDeleted }: {
       <input ref={confirmationInput} id="family-delete-confirmation" type="text" autoComplete="off" spellCheck={false} value={confirmation} onChange={(event) => { setConfirmation(event.target.value); setError('') }} disabled={deleting} />
       {!online && <p className="auth-message warning" role="status">Для удаления нужен интернет. Семейные данные пока не изменены.</p>}
       {error && <p className="auth-message error" role="alert">{error}</p>}
-      <div className="family-delete-actions"><button type="button" className="secondary-button" onClick={closeConfirmation} disabled={deleting}>Отмена</button><button type="button" className="danger-button" onClick={() => void deleteFamily()} disabled={deleting || !online || !canDeleteFamily(confirmation)}>{deleting ? 'Удаляем данные…' : 'Удалить без возможности восстановления'}</button></div>
+      <div className="family-delete-actions"><button type="button" className="secondary-button" onClick={closeConfirmation} disabled={deleting}>Отмена</button><button type="button" className="danger-button" onClick={() => void deleteFamily()} disabled={deleting || !online || !canDeleteFamily(confirmation)}>{deleting ? 'Удаляем данные…' : 'Удалить навсегда'}</button></div>
     </div>}
   </section>
 }
