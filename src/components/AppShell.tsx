@@ -5,6 +5,7 @@ import { Icon } from './Icon'
 import { NetworkStatus } from './NetworkStatus'
 import { OfflineSyncManager } from './OfflineSyncManager'
 import { PushNotificationSettings } from './PushNotificationSettings'
+import { ChildStarHistory } from './StarHistory'
 
 const navigation: { id: ChildTab; label: string }[] = [
   { id: 'today', label: 'Сегодня' },
@@ -36,6 +37,6 @@ export function AppShell({ activeTab, onTabChange, children }: { activeTab: Chil
         <Icon name={item.id} /><span>{item.label}</span>
       </button>)}
     </nav>
-    {profileOpen && <div className="sheet-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setProfileOpen(false) }}><section className="profile-sheet" role="dialog" aria-modal="true" aria-labelledby="child-profile-title"><div className="sheet-heading"><div><p className="eyebrow">Профиль ребёнка</p><h2 id="child-profile-title">{profile?.childName ?? 'Школьный помощник'}</h2></div><button type="button" className="sheet-close" aria-label="Закрыть профиль" onClick={() => setProfileOpen(false)}>×</button></div><section className="child-notifications"><h3>Уведомления</h3><p>Здесь можно подключить напоминания только для этого устройства. Время меняет родитель.</p><PushNotificationSettings role="child" /></section></section></div>}
+    {profileOpen && <div className="sheet-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setProfileOpen(false) }}><section className="profile-sheet" role="dialog" aria-modal="true" aria-labelledby="child-profile-title"><div className="sheet-heading"><div><p className="eyebrow">Профиль ребёнка</p><h2 id="child-profile-title">{profile?.childName ?? 'Школьный помощник'}</h2></div><button type="button" className="sheet-close" aria-label="Закрыть профиль" onClick={() => setProfileOpen(false)}>×</button></div>{profile && <ChildStarHistory childId={profile.childId} />}<section className="child-notifications"><h3>Уведомления</h3><p>Здесь можно подключить напоминания только для этого устройства. Время меняет родитель.</p><PushNotificationSettings role="child" /></section></section></div>}
   </div>
 }

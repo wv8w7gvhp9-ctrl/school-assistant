@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { addDays, samaraIsoDate, validateHomeworkDraft, type HomeworkDraft } from '../domain/homework'
+import { homeworkApprovalMessage } from '../domain/stars'
 import type { HomeworkStatus } from '../domain/types'
 import { supabase } from '../lib/supabase'
 import { StatusChip } from './UI'
@@ -124,11 +125,12 @@ export function ParentHomeworkEditor({ familyId, childId }: { familyId: string; 
     setBusyId(id)
     setError('')
     setMessage('')
-    const { error: reviewError } = await supabase.rpc('review_homework', { input_homework_id: id, input_decision: decision })
+    const { data, error: reviewError } = await supabase.rpc('review_homework', { input_homework_id: id, input_decision: decision })
     if (reviewError) setError('Не удалось сохранить решение. Обновите список и попробуйте ещё раз.')
     else {
       setAssignments((current) => current.map((assignment) => assignment.id === id ? { ...assignment, status: decision } : assignment))
-      setMessage(decision === 'approved' ? 'Задание подтверждено. Начислена одна звезда.' : 'Задание возвращено на доработку.')
+      const starsAwarded = Number((data?.[0] as { stars_awarded?: number } | undefined)?.stars_awarded ?? 0)
+      setMessage(decision === 'approved' ? homeworkApprovalMessage(starsAwarded) : 'Задание возвращено на доработку.')
     }
     setBusyId(null)
   }

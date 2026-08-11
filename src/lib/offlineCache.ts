@@ -119,6 +119,7 @@ export const offlineKey = {
   clubOccurrences: (childId: string, from: string, to: string) => `child:${childId}:club-occurrences:${from}:${to}`,
   backpack: (childId: string) => `child:${childId}:backpack`,
   stars: (childId: string) => `child:${childId}:stars`,
+  starHistory: (childId: string) => `child:${childId}:star-history`,
 }
 
 export function offlineSavedLabel(savedAt: string | null) {

@@ -5,6 +5,7 @@ import { loadWithOfflineFallback, offlineKey } from '../lib/offlineCache'
 import { ChildSessionProvider } from './ChildSession'
 import { useOnlineStatus } from './NetworkStatus'
 import { Turnstile } from './Turnstile'
+import { ParentStarHistory } from './StarHistory'
 
 const ParentScheduleEditor = lazy(() => import('./ParentScheduleEditor').then((module) => ({ default: module.ParentScheduleEditor })))
 const ParentHomeworkEditor = lazy(() => import('./ParentHomeworkEditor').then((module) => ({ default: module.ParentHomeworkEditor })))
@@ -74,7 +75,7 @@ function ParentSignedIn({ session }: { session: Session }) {
     {loadingFamily && <p className="auth-loading">Проверяем семейный профиль…</p>}
     {!loadingFamily && !family && <form className="auth-form" onSubmit={createFamily}><label htmlFor="child-name">Как зовут ребёнка?</label><p className="field-help">Достаточно имени или домашнего псевдонима. Другие личные данные не нужны.</p><input id="child-name" name="child-name" type="text" autoComplete="off" maxLength={48} value={childName} onChange={(event) => { setChildName(event.target.value); setFamilyError('') }} placeholder="Например, Миша" required /><button className="primary-button" type="submit" disabled={creatingFamily}>{creatingFamily ? 'Создаём профиль…' : 'Создать семейный профиль'}</button></form>}
     {family && <div className="family-success" role="status"><strong>Семья создана</strong><p>Профиль ребёнка: {family.child_name}.</p></div>}
-    {family && <Suspense fallback={<p className="auth-loading" role="status">Открываем данные семьи…</p>}><ParentScheduleEditor familyId={family.family_id} /><ParentHomeworkEditor familyId={family.family_id} childId={family.child_id} /><ParentBooksEditor familyId={family.family_id} childId={family.child_id} /><ParentClubsEditor familyId={family.family_id} childId={family.child_id} /><ParentBackpackReview /><ParentNotificationSettings /></Suspense>}
+    {family && <Suspense fallback={<p className="auth-loading" role="status">Открываем данные семьи…</p>}><ParentScheduleEditor familyId={family.family_id} /><ParentHomeworkEditor familyId={family.family_id} childId={family.child_id} /><ParentBooksEditor familyId={family.family_id} childId={family.child_id} /><ParentClubsEditor familyId={family.family_id} childId={family.child_id} /><ParentBackpackReview /><ParentStarHistory childId={family.child_id} childName={family.child_name} /><ParentNotificationSettings /></Suspense>}
     {family && <section className="link-code-panel"><h2>Подключить устройство ребёнка</h2><p>Откройте приложение на устройстве ребёнка, выберите «Подключить устройство ребёнка» и введите этот код.</p>{linkCode ? <div className="link-code" role="status"><strong>{linkCode.display_code}</strong><span>Код действует 15 минут и сработает только один раз.</span></div> : <button type="button" className="primary-button" onClick={createLinkCode} disabled={creatingCode}>{creatingCode ? 'Создаём код…' : 'Получить код подключения'}</button>}</section>}
     {familyError && <p className="auth-message error" role="alert">{familyError}</p>}
     <button type="button" className="secondary-button auth-button" onClick={signOut} disabled={signingOut}>{signingOut ? 'Выходим…' : 'Выйти'}</button>

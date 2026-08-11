@@ -10,6 +10,10 @@ describe('ключи офлайн-снимков', () => {
     expect(offlineKey.childProfile('device-a')).not.toBe(offlineKey.childProfile('device-b'))
   })
 
+  it('изолируют историю звёзд разных детей', () => {
+    expect(offlineKey.starHistory('child-a')).not.toBe(offlineKey.starHistory('child-b'))
+  })
+
   it('изолируют расписание по фактической дате', () => {
     expect(offlineKey.schedule('child', '2026-08-05')).not.toBe(offlineKey.schedule('child', '2026-08-06'))
   })
