@@ -15,6 +15,7 @@ const ParentBackpackReview = lazy(() => import('./ParentBackpackReview').then((m
 const ParentNotificationSettings = lazy(() => import('./ParentNotificationSettings').then((module) => ({ default: module.ParentNotificationSettings })))
 const ParentChildDevices = lazy(() => import('./ParentChildDevices').then((module) => ({ default: module.ParentChildDevices })))
 const ParentAcademicHistory = lazy(() => import('./ParentAcademicHistory').then((module) => ({ default: module.ParentAcademicHistory })))
+const ParentFamilyDeletion = lazy(() => import('./ParentFamilyDeletion').then((module) => ({ default: module.ParentFamilyDeletion })))
 
 type AuthState = 'idle' | 'sending' | 'sent' | 'error'
 type FamilyProfile = { family_id: string; child_id: string; child_name: string }
@@ -32,6 +33,7 @@ function ParentSignedIn({ session }: { session: Session }) {
   const [childName, setChildName] = useState('')
   const [creatingFamily, setCreatingFamily] = useState(false)
   const [familyError, setFamilyError] = useState('')
+  const [familyMessage, setFamilyMessage] = useState('')
   const [linkCode, setLinkCode] = useState<LinkCode | null>(null)
   const [creatingCode, setCreatingCode] = useState(false)
 
@@ -56,10 +58,19 @@ function ParentSignedIn({ session }: { session: Session }) {
     if (!supabase || !childName.trim()) return
     setCreatingFamily(true)
     setFamilyError('')
+    setFamilyMessage('')
     const { data, error } = await supabase.rpc('create_family', { child_display_name: childName.trim() })
     if (error) setFamilyError(error.code === '23505' ? 'Семейный профиль уже создан. Обновите страницу.' : 'Не удалось создать семейный профиль. Проверьте имя и повторите попытку.')
     else setFamily((data?.[0] as FamilyProfile | undefined) ?? null)
     setCreatingFamily(false)
+  }
+
+  function finishFamilyDeletion(message: string) {
+    setFamily(null)
+    setLinkCode(null)
+    setChildName('')
+    setFamilyError('')
+    setFamilyMessage(message)
   }
 
   async function createLinkCode() {
@@ -76,9 +87,11 @@ function ParentSignedIn({ session }: { session: Session }) {
     <p className="eyebrow">Вход подтверждён</p><h1>Здравствуйте!</h1><p>Вы вошли как родитель: {session.user.email}.</p>
     {loadingFamily && <p className="auth-loading">Проверяем семейный профиль…</p>}
     {!loadingFamily && !family && <form className="auth-form" onSubmit={createFamily}><label htmlFor="child-name">Как зовут ребёнка?</label><p className="field-help">Достаточно имени или домашнего псевдонима. Другие личные данные не нужны.</p><input id="child-name" name="child-name" type="text" autoComplete="off" maxLength={48} value={childName} onChange={(event) => { setChildName(event.target.value); setFamilyError('') }} placeholder="Например, Миша" required /><button className="primary-button" type="submit" disabled={creatingFamily}>{creatingFamily ? 'Создаём профиль…' : 'Создать семейный профиль'}</button></form>}
+    {familyMessage && <p className="auth-message success" role="status">{familyMessage}</p>}
     {family && <div className="family-success" role="status"><strong>Семья создана</strong><p>Профиль ребёнка: {family.child_name}.</p></div>}
     {family && <Suspense fallback={<p className="auth-loading" role="status">Открываем данные семьи…</p>}><ParentScheduleEditor familyId={family.family_id} /><ParentHomeworkEditor familyId={family.family_id} childId={family.child_id} /><ParentBooksEditor familyId={family.family_id} childId={family.child_id} /><ParentClubsEditor familyId={family.family_id} childId={family.child_id} /><ParentBackpackReview /><ParentStarHistory childId={family.child_id} childName={family.child_name} /><ParentAcademicHistory childName={family.child_name} /><ParentNotificationSettings /><ParentChildDevices /></Suspense>}
     {family && <section className="link-code-panel"><h2>Подключить устройство ребёнка</h2><p>Откройте приложение на устройстве ребёнка, выберите «Подключить устройство ребёнка» и введите этот код.</p>{linkCode ? <div className="link-code" role="status"><strong>{linkCode.display_code}</strong><span>Код действует 15 минут и сработает только один раз.</span></div> : <button type="button" className="primary-button" onClick={createLinkCode} disabled={creatingCode}>{creatingCode ? 'Создаём код…' : 'Получить код подключения'}</button>}</section>}
+    {family && <Suspense fallback={<p className="auth-loading" role="status">Открываем настройки семьи…</p>}><ParentFamilyDeletion childId={family.child_id} childName={family.child_name} onDeleted={finishFamilyDeletion} /></Suspense>}
     {familyError && <p className="auth-message error" role="alert">{familyError}</p>}
     <button type="button" className="secondary-button auth-button" onClick={signOut} disabled={signingOut}>{signingOut ? 'Выходим…' : 'Выйти'}</button>
   </section></main>

@@ -66,6 +66,29 @@ export async function deleteOfflineRecord(key: string) {
   await offlineTransactionComplete(transaction)
 }
 
+export function isOfflineRecordForChild(record: unknown, childId: string) {
+  if (!record || typeof record !== 'object') return false
+  const candidate = record as { key?: unknown; childId?: unknown }
+  return candidate.childId === childId || (typeof candidate.key === 'string' && candidate.key.startsWith(`child:${childId}:`))
+}
+
+export async function clearOfflineDataForChild(childId: string) {
+  const database = await openOfflineDatabase()
+  const transaction = database.transaction([offlineSnapshotStore, offlineMutationStore], 'readwrite')
+  for (const storeName of [offlineSnapshotStore, offlineMutationStore]) {
+    const store = transaction.objectStore(storeName)
+    const request = store.openCursor()
+    request.onsuccess = () => {
+      const cursor = request.result
+      if (!cursor) return
+      if (isOfflineRecordForChild(cursor.value, childId)) cursor.delete()
+      cursor.continue()
+    }
+  }
+  await offlineTransactionComplete(transaction)
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('school-assistant:offline-queue-changed'))
+}
+
 export async function readOfflineSnapshot<T>(key: string): Promise<OfflineSnapshot<T> | null> {
   try {
     return await readOfflineRecord<T>(key)
