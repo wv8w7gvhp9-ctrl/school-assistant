@@ -240,6 +240,24 @@ p { color: var(--color-text-muted); font-size: 16px; line-height: 1.5; }
 
 .parent-child-devices { display: grid; gap: var(--space-4); margin-top: var(--space-6); padding-top: var(--space-5); border-top: 1px solid var(--color-border); }
 .parent-child-devices h2 { margin: 0; }
+
+.parent-academic-history { display: grid; gap: var(--space-4); margin-top: var(--space-6); padding-top: var(--space-5); border-top: 1px solid var(--color-border); }
+.parent-academic-history h2, .parent-academic-history h3 { margin: 0; }
+.history-heading { align-items: center; }
+.history-readonly { padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius-pill); color: var(--color-text-muted); background: var(--color-surface-subtle); font-size: 13px; font-weight: 700; }
+.history-toolbar { display: grid; gap: var(--space-3); }
+.history-filters { overflow-x: auto; padding-bottom: var(--space-1); }
+.history-filters button { flex: 0 0 auto; }
+.history-list { display: grid; gap: var(--space-3); }
+.history-row { display: grid; gap: var(--space-2); padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-subtle); }
+.history-row-meta, .history-row-status { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.history-row-meta span { color: var(--color-accent-blue); font-size: 13px; font-weight: 800; }
+.history-row-meta time, .history-row p { color: var(--color-text-muted); }
+.history-row p { overflow-wrap: anywhere; }
+.history-row-status { padding-top: var(--space-2); border-top: 1px solid var(--color-border); color: var(--color-text-muted); font-size: 14px; font-weight: 700; }
+.history-row-status strong { color: var(--color-accent-gold-strong); white-space: nowrap; }
+
+@media (min-width: 700px) { .history-toolbar { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }.history-toolbar .secondary-button { width: auto; }.history-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .child-device-list { display: grid; gap: var(--space-3); }
 .child-device-row { display: grid; gap: var(--space-2); padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-subtle); }
 .child-device-row.revoked { opacity: .72; }
