@@ -111,7 +111,7 @@ function ChildConnect({ onBack, onLinkStart }: { onBack: () => void; onLinkStart
   return <main className="auth-page"><section className="auth-card"><p className="eyebrow">Для ребёнка</p><h1>Подключить устройство</h1><p>Попроси родителя показать короткий код. Почта и пароль не нужны.</p>{turnstileSiteKey ? <form className="auth-form" onSubmit={connect}><label htmlFor="child-code">Код подключения</label><input id="child-code" name="child-code" type="text" inputMode="text" autoComplete="one-time-code" maxLength={14} value={code} onChange={(event) => { setCode(event.target.value.toUpperCase()); setMessage('') }} placeholder="ABCD-EFGH-IJKL" required /><Turnstile siteKey={turnstileSiteKey} onToken={onToken} onError={onCaptchaError} /><button className="primary-button" type="submit" disabled={state === 'connecting' || !captchaToken}>{state === 'connecting' ? 'Подключаем…' : 'Подключить устройство'}</button></form> : <p className="auth-message error" role="alert">Защита подключения ещё не настроена. Попросите родителя завершить настройку.</p>}{message && <p className="auth-message error" role="alert">{message}</p>}<button type="button" className="text-button auth-back" onClick={onBack}>Я родитель</button></section></main>
 }
 
-function ChildSignedIn({ sessionUserId, waitForLink, onLinkResolved, children }: { sessionUserId: string; waitForLink: boolean; onLinkResolved: () => void; children: ReactNode }) {
+function ChildSignedIn({ sessionUserId, waitForLink, onLinkResolved, onReconnect, children }: { sessionUserId: string; waitForLink: boolean; onLinkResolved: () => void; onReconnect: () => Promise<void>; children: ReactNode }) {
   const online = useOnlineStatus()
   const [profile, setProfile] = useState<{ childId: string; childName: string } | null>(null)
   const [error, setError] = useState('')
@@ -151,7 +151,7 @@ function ChildSignedIn({ sessionUserId, waitForLink, onLinkResolved, children }:
     }
   }, [online, onLinkResolved, sessionUserId, waitForLink])
   if (profile) return <ChildSessionProvider profile={profile}>{children}</ChildSessionProvider>
-  return <main className="auth-page"><section className="auth-card"><p className="eyebrow">Устройство ребёнка</p><h1>Подключаем устройство…</h1>{error ? <p className="auth-message error" role="alert">{error}</p> : <p className="auth-loading">Проверяем код…</p>}</section></main>
+  return <main className="auth-page"><section className="auth-card"><p className="eyebrow">Устройство ребёнка</p><h1>{error ? 'Устройство отключено' : 'Подключаем устройство…'}</h1>{error ? <><p className="auth-message error" role="alert">{error}</p>{online && <button type="button" className="primary-button" onClick={() => void onReconnect()}>Подключить заново</button>}</> : <p className="auth-loading">Проверяем код…</p>}</section></main>
 }
 
 export function AuthGate({ children }: { children: ReactNode }) {
@@ -162,6 +162,12 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [screen, setScreen] = useState<'parent' | 'child'>('parent')
   const [childLinkPending, setChildLinkPending] = useState(false)
   const handleChildLinkResolved = useCallback(() => setChildLinkPending(false), [])
+  const reconnectChild = useCallback(async () => {
+    if (!supabase) return
+    setChildLinkPending(false)
+    setScreen('child')
+    await supabase.auth.signOut()
+  }, [])
 
   useEffect(() => {
     if (!supabase) return
@@ -186,7 +192,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (!supabase) return <MissingConfiguration>{children}</MissingConfiguration>
   if (loading) return <main className="auth-page"><p className="auth-loading">Проверяем безопасную сессию…</p></main>
-  if (session?.user.is_anonymous) return <ChildSignedIn sessionUserId={session.user.id} waitForLink={childLinkPending} onLinkResolved={handleChildLinkResolved}>{children}</ChildSignedIn>
+  if (session?.user.is_anonymous) return <ChildSignedIn sessionUserId={session.user.id} waitForLink={childLinkPending} onLinkResolved={handleChildLinkResolved} onReconnect={reconnectChild}>{children}</ChildSignedIn>
   if (session) return <ParentSignedIn session={session} />
 
   if (screen === 'child') return <ChildConnect onBack={() => setScreen('parent')} onLinkStart={() => setChildLinkPending(true)} />
