@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyReadingDiaryDraft, bookStatusLabel, filterBooks, validateReadingDiary, type CloudBook } from './books'
+import { applyReadingDiaryDraft, bookStatusLabel, filterBooks, readingDiaryCharacterPrompt, readingDiarySummaryPrompt, validateReadingDiary, type CloudBook } from './books'
 
 const books: CloudBook[] = [
   { id: '1', title: 'Денискины рассказы', author: 'В. Драгунский', status: 'reading', started_on: '2026-08-01', finished_on: null, main_characters: '', summary: '', rating: null, review_status: 'not_submitted', updated_at: '2026-08-05T10:00:00.000Z' },
@@ -41,5 +41,20 @@ describe('читательский дневник', () => {
   it('не снимает родительское подтверждение при правке текста', () => {
     const updated = applyReadingDiaryDraft(books[1], { status: 'reading', startedOn: '2026-07-01', finishedOn: '2026-07-20', mainCharacters: 'Элли и Тотошка', summary: 'Уточнённое содержание', rating: 4 })
     expect(updated).toMatchObject({ status: 'finished', review_status: 'approved', rating: 4 })
+  })
+
+  it('стабильно выбирает один вопрос о героях для каждой книги', () => {
+    const firstPrompt = readingDiaryCharacterPrompt(books[0])
+    expect(readingDiaryCharacterPrompt(books[0])).toBe(firstPrompt)
+    expect(firstPrompt.length).toBeGreaterThan(20)
+  })
+
+  it('чередует вопросы о героях между разными книгами', () => {
+    const prompts = Array.from({ length: 12 }, (_, index) => readingDiaryCharacterPrompt({ id: String(index), title: `Сказка ${index}` }))
+    expect(new Set(prompts).size).toBeGreaterThan(1)
+  })
+
+  it('просит пересказать книгу тремя предложениями', () => {
+    expect(readingDiarySummaryPrompt).toBe('О чём эта книга? Составь три предложения.')
   })
 })

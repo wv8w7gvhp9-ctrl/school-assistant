@@ -31,6 +31,22 @@ export type StoredReadingDiaryDraft = {
   draft: ReadingDiaryDraft
 }
 
+const characterPrompts = [
+  'Какой герой тебе больше всех понравился?',
+  'Расскажи о положительном герое, который тебе больше всего понравился.',
+  'Какой отрицательный герой был в этой сказке? Почему он поступал плохо?',
+  'Какие герои помогали друг другу в этой истории?',
+] as const
+
+export function readingDiaryCharacterPrompt(book: Pick<CloudBook, 'id' | 'title'>) {
+  const seed = `${book.id}:${book.title}`
+  let hash = 0
+  for (const character of seed) hash = (hash * 31 + character.codePointAt(0)!) >>> 0
+  return characterPrompts[hash % characterPrompts.length]
+}
+
+export const readingDiarySummaryPrompt = 'О чём эта книга? Составь три предложения.'
+
 export function filterBooks(books: CloudBook[], filter: BookFilter) {
   if (filter === 'Читаю') return books.filter((book) => book.status === 'reading')
   if (filter === 'Прочитано') return books.filter((book) => book.status === 'finished')

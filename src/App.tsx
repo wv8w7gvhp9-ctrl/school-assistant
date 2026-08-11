@@ -90,6 +90,7 @@ const screens: Record<ChildTab, () => ReactElement> = { today: Today, schedule: 
 
 export function App() {
   const [activeTab, setActiveTab] = useState<ChildTab>('today')
+  const [refreshVersion, setRefreshVersion] = useState(0)
   const Screen = screens[activeTab]
-  return <AuthGate><AppShell activeTab={activeTab} onTabChange={setActiveTab}><Suspense fallback={<p className="child-cloud-state" role="status">Открываем раздел…</p>}><Screen /></Suspense></AppShell></AuthGate>
+  return <AuthGate><AppShell activeTab={activeTab} onTabChange={setActiveTab} onRefresh={() => setRefreshVersion((version) => version + 1)}><Suspense fallback={<p className="child-cloud-state" role="status">Открываем раздел…</p>}><Screen key={`${activeTab}-${refreshVersion}`} /></Suspense></AppShell></AuthGate>
 }

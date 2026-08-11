@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { applyReadingDiaryDraft, bookStatusLabel, filterBooks, validateReadingDiary, type BookFilter, type CloudBook, type ReadingDiaryDraft, type StoredReadingDiaryDraft } from '../domain/books'
+import { applyReadingDiaryDraft, bookStatusLabel, filterBooks, readingDiaryCharacterPrompt, readingDiarySummaryPrompt, validateReadingDiary, type BookFilter, type CloudBook, type ReadingDiaryDraft, type StoredReadingDiaryDraft } from '../domain/books'
 import { deleteOfflineRecord, loadWithOfflineFallback, offlineKey, readOfflineRecord, saveOfflineSnapshot, writeOfflineRecord } from '../lib/offlineCache'
 import { enqueueReadingDiary, listReadingDiaryMutations, notifyOfflineQueueChanged, offlineQueueSyncedEvent, type OfflineSyncResult, type ReadingDiaryMutation } from '../lib/offlineQueue'
 import { supabase } from '../lib/supabase'
@@ -26,6 +26,8 @@ export function CloudBooks() {
   const online = useOnlineStatus()
   const openingBookId = useRef<string | null>(null)
   const draftRevision = useRef(0)
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+  const diaryTriggerRef = useRef<HTMLElement | null>(null)
   const [books, setBooks] = useState<CloudBook[]>([])
   const [filter, setFilter] = useState<BookFilter>('Все')
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -84,6 +86,19 @@ export function CloudBooks() {
   useEffect(() => { void loadBooks() }, [online, profile])
 
   useEffect(() => {
+    if (!editingBook) return
+    document.body.classList.add('sheet-open')
+    closeButtonRef.current?.focus()
+    const handleKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') void closeDiary() }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.body.classList.remove('sheet-open')
+      window.removeEventListener('keydown', handleKeyDown)
+      diaryTriggerRef.current?.focus()
+    }
+  }, [editingBook])
+
+  useEffect(() => {
     if (!profile) return
     const handleSync = (event: Event) => {
       const detail = (event as CustomEvent<{ childId: string; results: OfflineSyncResult[] }>).detail
@@ -133,6 +148,7 @@ export function CloudBooks() {
   const listBooks = currentBook ? visibleBooks.filter((book) => book.id !== currentBook.id) : visibleBooks
 
   async function openDiary(book: CloudBook) {
+    diaryTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     openingBookId.current = book.id
     draftRevision.current = 0
     setEditingBook(book)
@@ -245,17 +261,17 @@ export function CloudBooks() {
     {state === 'ready' && visibleBooks.length === 0 && <div className="child-cloud-state"><strong>Здесь пока нет книг</strong><p>{filter === 'Все' ? 'Родитель добавит книгу для чтения.' : 'Книги с таким статусом появятся здесь.'}</p></div>}
     {currentBook && <article className={`current-book ${queuedBookIds.has(currentBook.id) ? 'pending-sync' : ''}`}><div className="book-mark"><Icon name="books" /></div><p className="eyebrow">Сейчас читаю</p><h2>{currentBook.title}</h2><p>{currentBook.author}</p><ReviewLabel book={currentBook} queued={queuedBookIds.has(currentBook.id)} /><button type="button" className="primary-button" onClick={() => void openDiary(currentBook)}>Открыть дневник</button></article>}
     {state === 'ready' && listBooks.length > 0 && <div className="book-list">{listBooks.map((book) => <BookRow book={book} key={book.id} />)}</div>}
-    {editingBook && draft && <div className="sheet-backdrop"><section className="reading-diary-sheet" role="dialog" aria-modal="true" aria-labelledby="diary-title"><div className="sheet-heading"><div><p className="eyebrow">Читательский дневник</p><h2 id="diary-title">{editingBook.title}</h2></div><button type="button" className="sheet-close" aria-label="Закрыть дневник" onClick={() => void closeDiary()}>×</button></div><p>{editingBook.author}</p><form className="auth-form" onSubmit={saveDiary}>
+    {editingBook && draft && <div className="sheet-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) void closeDiary() }}><section className="reading-diary-sheet" role="dialog" aria-modal="true" aria-labelledby="diary-title"><div className="sheet-heading"><div><p className="eyebrow">Читательский дневник</p><h2 id="diary-title">{editingBook.title}</h2></div><button ref={closeButtonRef} type="button" className="sheet-close" aria-label="Закрыть дневник" onClick={() => void closeDiary()}>×</button></div><div className="reading-diary-scroll"><p>{editingBook.author}</p><form className="auth-form" onSubmit={saveDiary}>
       <label htmlFor="book-status">Статус книги</label><select id="book-status" className="parent-select" value={draft.status} onChange={(event) => updateDraft({ status: event.target.value as ReadingDiaryDraft['status'] })} disabled={editingBook.review_status === 'approved'}><option value="assigned">Нужно прочитать</option><option value="reading">Читаю</option><option value="finished">Прочитано</option></select>
       <div className="parent-form-grid"><div><label htmlFor="book-started">Начал читать</label><input id="book-started" type="date" value={draft.startedOn} onChange={(event) => updateDraft({ startedOn: event.target.value })} /></div><div><label htmlFor="book-finished">Закончил читать</label><input id="book-finished" type="date" value={draft.finishedOn} onChange={(event) => updateDraft({ finishedOn: event.target.value })} /></div></div>
-      <label htmlFor="book-characters">Главные герои</label><textarea id="book-characters" maxLength={2000} value={draft.mainCharacters} onChange={(event) => updateDraft({ mainCharacters: event.target.value })} placeholder="Кто был в этой истории?" />
-      <label htmlFor="book-summary">Краткое содержание</label><textarea id="book-summary" maxLength={6000} value={draft.summary} onChange={(event) => updateDraft({ summary: event.target.value })} placeholder="О чём эта книга?" />
+      <label htmlFor="book-characters">Главные герои</label><textarea id="book-characters" maxLength={2000} value={draft.mainCharacters} onChange={(event) => updateDraft({ mainCharacters: event.target.value })} placeholder={readingDiaryCharacterPrompt(editingBook)} />
+      <label htmlFor="book-summary">Краткое содержание</label><textarea id="book-summary" maxLength={6000} value={draft.summary} onChange={(event) => updateDraft({ summary: event.target.value })} placeholder={readingDiarySummaryPrompt} />
       <fieldset className="rating-field"><legend>Моя оценка</legend><div>{[1, 2, 3, 4, 5].map((rating) => <button type="button" key={rating} className={draft.rating === rating ? 'selected' : ''} aria-pressed={draft.rating === rating} aria-label={`Оценка ${rating} из 5`} onClick={() => updateDraft({ rating })}>{rating}</button>)}</div></fieldset>
       {draftNotice && <p className={`diary-draft-note ${draftNotice.kind}`} role={draftNotice.kind === 'error' ? 'alert' : 'status'}>{draftNotice.text}</p>}
       {formError && <p className="auth-message error" role="alert">{formError}</p>}
       <button type="submit" className="primary-button" disabled={saving}>{saving ? 'Сохраняем…' : online ? draft.status === 'finished' ? 'Сохранить и отправить родителю' : 'Сохранить дневник' : 'Сохранить на устройстве'}</button>
       {draftNotice && !queuedBookIds.has(editingBook.id) && !confirmDiscard && <button type="button" className="secondary-button" disabled={saving} onClick={() => setConfirmDiscard(true)}>Отказаться от черновика</button>}
       {confirmDiscard && <div className="parent-confirm"><p>Удалить только черновик с этого устройства? Уже отправленные родителю данные не изменятся.</p><div><button type="button" className="secondary-button" onClick={() => setConfirmDiscard(false)}>Оставить</button><button type="button" className="danger-button" disabled={saving} onClick={() => void discardDraft()}>Удалить черновик</button></div></div>}
-    </form></section></div>}
+    </form></div></section></div>}
   </section>
 }

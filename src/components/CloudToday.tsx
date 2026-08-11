@@ -220,6 +220,14 @@ export function CloudToday() {
         ? 'Рюкзак ждёт проверки'
         : 'Собрать рюкзак'
 
+  const backpackButtonDetail = backpackMeta?.status === 'approved'
+    ? 'Все вещи отмечены'
+    : backpackMeta?.status === 'pending_review' || submissionQueued
+      ? 'Чек-лист отправлен родителю'
+      : progress.total > 0
+        ? `Чек-лист · ${progress.checked} из ${progress.total}`
+        : 'Чек-лист вещей'
+
   return <section className="screen cloud-today"><div className="screen-heading"><div><h1>Привет, {profile?.childName}!</h1><p className="today-date">{formatFullRussianDate(today)}</p></div><StarCounter value={stars} /></div>
     {cachedAt && <OfflineDataNote savedAt={cachedAt} />}
     {state === 'loading' && <p className="child-cloud-state" role="status">Собираем твой сегодняшний день…</p>}
@@ -231,7 +239,7 @@ export function CloudToday() {
       {todayClubs.length > 0 && <><SectionTitle>После уроков</SectionTitle>{todayClubs.map((club) => <article className="card club-summary" key={`${club.club_id}-${club.starts_at}`}><span className="club-icon"><Icon name="clubs" /></span><div><strong>{club.title}</strong><p>{clubTimeRange(club.starts_at, club.ends_at)}</p></div></article>)}</>}
       <SectionTitle>Домашка</SectionTitle>
       {todayHomework.length === 0 ? <div className="child-cloud-state compact"><strong>Всё сделано</strong><p>На сегодня нет заданий, которые нужно выполнить.</p></div> : <div className="today-homework-list">{todayHomework.slice(0, 3).map((assignment) => <article className="card today-homework" key={assignment.id}><div><strong>{assignment.subject_title}</strong><p>{assignment.task}</p></div><StatusChip status={assignment.status} /></article>)}</div>}
-      <button className="primary-button backpack-open-button" type="button" onClick={() => setBackpackOpen(true)} disabled={!backpackMeta}><Icon name="backpack" />{backpackButtonLabel}</button>
+      <button className="primary-button backpack-open-button" type="button" onClick={() => setBackpackOpen(true)} disabled={!backpackMeta} aria-label={`${backpackButtonLabel}. ${backpackButtonDetail}`}><Icon name="backpack" /><span className="backpack-button-copy"><strong>{backpackButtonLabel}</strong><small>{backpackButtonDetail}</small></span><Icon name="chevron" /></button>
       {backpackError ? <div className="auth-message error" role="alert"><p>Не получилось подготовить рюкзак. Остальные данные дня доступны.</p><button type="button" className="secondary-button" onClick={() => void loadToday()}>Повторить</button></div> : !backpackMeta && <p className="screen-note">Ближайший учебный день пока не найден.</p>}
     </>}
     {backpackOpen && backpackMeta && <div className="sheet-backdrop"><section className="backpack-sheet" role="dialog" aria-modal="true" aria-labelledby="backpack-title"><div className="sheet-heading"><div><p className="eyebrow">На {formatFullRussianDate(backpackMeta.day).toLowerCase()}</p><h2 id="backpack-title">Собрать рюкзак</h2></div><button type="button" className="sheet-close" aria-label="Закрыть рюкзак" onClick={() => setBackpackOpen(false)}>×</button></div>
