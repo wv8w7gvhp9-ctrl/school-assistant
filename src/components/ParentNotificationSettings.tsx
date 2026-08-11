@@ -96,7 +96,7 @@ export function ParentNotificationSettings() {
       <label><span>Время</span><input type="time" value={normalizeNotificationTime(preference.notify_at) ?? ''} disabled={!preference.enabled} onChange={(event) => update(preference.kind, { notify_at: event.target.value })} /></label>
     </div>)}</div>}
     {!loading && preferences.length > 0 && <button type="button" className="primary-button" disabled={saving} onClick={() => void save()}>{saving ? 'Сохраняем…' : 'Сохранить уведомления'}</button>}
-    <h3>Подключённые устройства</h3>
+    <h3>Устройства с уведомлениями</h3>
     {devices.length === 0 ? <p className="parent-empty">Активных push-подписок пока нет.</p> : <div className="push-device-list">{devices.map((device) => <div className="push-device-row" key={device.id}><div><strong>{device.device_label}</strong><span>{device.role === 'child' ? 'Устройство ребёнка' : 'Устройство родителя'} · обновлено {new Date(device.updated_at).toLocaleDateString('ru-RU')}</span></div><button type="button" className="text-button" onClick={() => void revokeDevice(device.id)}>Отозвать</button></div>)}</div>}
     {error && <p className="auth-message error" role="alert">{error}</p>}
     {message && <p className="auth-message success" role="status">{message}</p>}
