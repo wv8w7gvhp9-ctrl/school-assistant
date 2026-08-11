@@ -1,0 +1,26 @@
+-- Запускать после применения миграции и развёртывания функции sync-school-calendar.
+-- Используются уже созданные для push Vault-секреты:
+-- school_assistant_project_url и school_assistant_push_cron_secret.
+-- Функция сама работает только с 30 мая по 30 сентября по времени Самары.
+
+create extension if not exists pg_cron with schema pg_catalog;
+create extension if not exists pg_net with schema extensions;
+
+select cron.unschedule(jobid)
+from cron.job
+where jobname = 'school-assistant-sync-school-calendar';
+
+select cron.schedule(
+  'school-assistant-sync-school-calendar',
+  '15 17 * 5-9 *',
+  $$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'school_assistant_project_url') || '/functions/v1/sync-school-calendar',
+    headers := jsonb_build_object(
+      'content-type', 'application/json',
+      'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'school_assistant_push_cron_secret')
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);

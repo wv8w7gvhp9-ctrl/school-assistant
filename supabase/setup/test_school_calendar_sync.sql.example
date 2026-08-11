@@ -1,0 +1,11 @@
+-- Одноразовая безопасная проверка sync-school-calendar.
+-- Секрет читается внутри Postgres Vault и не выводится в результат.
+
+select net.http_post(
+  url := (select decrypted_secret from vault.decrypted_secrets where name = 'school_assistant_project_url') || '/functions/v1/sync-school-calendar',
+  headers := jsonb_build_object(
+    'content-type', 'application/json',
+    'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'school_assistant_push_cron_secret')
+  ),
+  body := '{}'::jsonb
+) as request_id;

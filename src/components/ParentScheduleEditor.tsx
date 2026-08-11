@@ -12,6 +12,12 @@ import {
   type NonSchoolPeriod,
   type NonSchoolReason,
 } from '../domain/schedule'
+import {
+  academicYearLabel,
+  formatCalendarPeriod,
+  isCalendarProposal,
+  type SchoolCalendarProposal,
+} from '../domain/schoolCalendar'
 import { supabase } from '../lib/supabase'
 import { useOnlineStatus } from './NetworkStatus'
 
@@ -102,6 +108,9 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
   const [savingNonSchoolPeriod, setSavingNonSchoolPeriod] = useState(false)
   const [periodPendingDeletion, setPeriodPendingDeletion] = useState<NonSchoolPeriod | null>(null)
   const [deletingNonSchoolPeriod, setDeletingNonSchoolPeriod] = useState(false)
+  const [calendarProposals, setCalendarProposals] = useState<SchoolCalendarProposal[]>([])
+  const [reviewingProposalId, setReviewingProposalId] = useState<string | null>(null)
+  const [proposalPendingRejection, setProposalPendingRejection] = useState<string | null>(null)
 
   const loadYears = async () => {
     const client = supabase
@@ -150,6 +159,21 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
     setNonSchoolDays((data ?? []) as NonSchoolDay[])
   }
 
+  const loadCalendarProposals = async (yearId: string) => {
+    const client = supabase
+    if (!client || !yearId) {
+      setCalendarProposals([])
+      return
+    }
+    const { data, error: requestError } = await client.rpc('get_my_school_calendar_proposals', {
+      input_academic_year_id: yearId,
+    })
+    if (requestError) throw requestError
+    const proposals = (data ?? []).filter(isCalendarProposal)
+    if (proposals.length !== (data ?? []).length) throw new Error('Unexpected calendar proposal response')
+    setCalendarProposals(proposals)
+  }
+
   useEffect(() => {
     let active = true
     setLoading(true)
@@ -167,7 +191,7 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
   useEffect(() => {
     if (!selectedYear) return
     setLoading(true)
-    void Promise.all([loadLessons(selectedYear.id), loadNonSchoolDays(selectedYear)]).catch(() => {
+    void Promise.all([loadLessons(selectedYear.id), loadNonSchoolDays(selectedYear), loadCalendarProposals(selectedYear.id)]).catch(() => {
       setError('Не удалось загрузить уроки и неучебные дни. Проверьте интернет и попробуйте ещё раз.')
     }).finally(() => setLoading(false))
   }, [selectedYearId, years])
@@ -178,6 +202,7 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
     const initialDay = today >= selectedYear.starts_on && today <= selectedYear.ends_on ? today : selectedYear.starts_on
     setNonSchoolDraft({ reason: 'vacation', startsOn: initialDay, endsOn: initialDay })
     setPeriodPendingDeletion(null)
+    setProposalPendingRejection(null)
   }, [selectedYearId])
 
   async function createYear(event: FormEvent<HTMLFormElement>) {
@@ -418,7 +443,62 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
     }
   }
 
+  async function approveCalendarProposal(proposal: SchoolCalendarProposal) {
+    if (!supabase || !selectedYear || reviewingProposalId) return
+    if (!online) {
+      setError('Не удалось подтвердить календарь без интернета. Подключитесь к сети и попробуйте ещё раз.')
+      return
+    }
+    setReviewingProposalId(proposal.id)
+    setError('')
+    setMessage('')
+    const { data, error: reviewError } = await supabase.rpc('approve_my_school_calendar_proposal', {
+      input_proposal_id: proposal.id,
+    })
+    setReviewingProposalId(null)
+    if (reviewError) {
+      setError(reviewError.code === '22023'
+        ? 'Это предложение уже было рассмотрено. Обновите страницу.'
+        : 'Не удалось подтвердить календарь. Проверьте интернет и попробуйте ещё раз.')
+      return
+    }
+    const result = (data as { added_days: number; preserved_days: number }[] | null)?.[0]
+    try {
+      await Promise.all([loadNonSchoolDays(selectedYear), loadCalendarProposals(selectedYear.id)])
+      const preserved = Number(result?.preserved_days ?? 0)
+      setMessage(preserved > 0
+        ? `Календарь подтверждён. Добавлено дней: ${Number(result?.added_days ?? 0)}. Ручные записи сохранены: ${preserved}.`
+        : `Календарь подтверждён. Добавлено дней: ${Number(result?.added_days ?? 0)}.`)
+    } catch {
+      setError('Календарь подтверждён, но список не обновился. Откройте страницу снова.')
+    }
+  }
+
+  async function rejectCalendarProposal(proposal: SchoolCalendarProposal) {
+    if (!supabase || reviewingProposalId) return
+    if (!online) {
+      setError('Не удалось отклонить предложение без интернета. Подключитесь к сети и попробуйте ещё раз.')
+      return
+    }
+    setReviewingProposalId(proposal.id)
+    setError('')
+    setMessage('')
+    const { error: reviewError } = await supabase.rpc('reject_my_school_calendar_proposal', {
+      input_proposal_id: proposal.id,
+    })
+    setReviewingProposalId(null)
+    if (reviewError) {
+      setError('Не удалось отклонить предложение. Проверьте интернет и попробуйте ещё раз.')
+      return
+    }
+    setProposalPendingRejection(null)
+    await loadCalendarProposals(selectedYearId)
+    setMessage('Предложение отклонено. Сохранённые даты не изменились.')
+  }
+
   const nonSchoolPeriods = groupNonSchoolDays(nonSchoolDays)
+  const visibleCalendarProposal = calendarProposals.find((proposal) => proposal.status === 'pending')
+    ?? calendarProposals.find((proposal) => proposal.status === 'approved')
 
   return <section className="parent-schedule" aria-labelledby="parent-schedule-title">
     <div className="parent-section-heading"><div><p className="eyebrow">Для родителя</p><h2 id="parent-schedule-title">Недельное расписание</h2></div></div>
@@ -457,6 +537,34 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
         <button className="secondary-button" type="submit" disabled={savingCancellation || !cancellationLessonId}>{savingCancellation ? 'Сохраняем…' : exceptionKind === 'cancelled' ? 'Отменить урок на дату' : 'Сохранить замену'}</button>
       </form>}
       {selectedYear && <section className="parent-calendar-section" aria-labelledby="non-school-title">
+        <section className="calendar-proposal-panel" aria-labelledby="calendar-proposal-title">
+          <div>
+            <p className="eyebrow">Официальные рекомендации</p>
+            <h3 id="calendar-proposal-title">Календарь на {academicYearLabel(selectedYear.starts_on)} год</h3>
+          </div>
+          {!visibleCalendarProposal && <p className="parent-empty">Официальное предложение пока не найдено. Система проверит источник снова по расписанию.</p>}
+          {visibleCalendarProposal && <>
+            <p className={`auth-message ${visibleCalendarProposal.status === 'approved' ? 'success' : 'warning'}`} role="status">
+              {visibleCalendarProposal.status === 'approved'
+                ? 'Календарь подтверждён родителем и уже действует.'
+                : 'Проверьте даты. До подтверждения детское расписание не изменится.'}
+            </p>
+            <div className="calendar-source">
+              <strong>{visibleCalendarProposal.document_title}</strong>
+              <p>Письмо № {visibleCalendarProposal.document_number} от {formatCalendarPeriod({ label: '', reason: 'holiday', starts_on: visibleCalendarProposal.published_on, ends_on: visibleCalendarProposal.published_on })}</p>
+              <div><a href={visibleCalendarProposal.source_url} target="_blank" rel="noreferrer">Открыть в КонсультантПлюс</a><a href={visibleCalendarProposal.official_index_url} target="_blank" rel="noreferrer">Официальная публикация</a></div>
+            </div>
+            <ul className="calendar-period-list">
+              {visibleCalendarProposal.periods.map((period) => <li key={`${period.label}-${period.starts_on}`}><strong>{period.label}</strong><span>{formatCalendarPeriod(period)}</span></li>)}
+            </ul>
+            <p className="field-help">Общие даты для четвертной системы. Ручные записи не будут перезаписаны. Дополнительные каникулы первого класса не добавляются без подтверждённых данных о классе.</p>
+            {visibleCalendarProposal.status === 'pending' && <div className="calendar-proposal-actions">
+              <button className="primary-button" type="button" onClick={() => void approveCalendarProposal(visibleCalendarProposal)} disabled={!online || Boolean(reviewingProposalId)}>{reviewingProposalId === visibleCalendarProposal.id ? 'Сохраняем…' : 'Подтвердить и добавить'}</button>
+              <button className="secondary-button" type="button" onClick={() => setProposalPendingRejection(visibleCalendarProposal.id)} disabled={!online || Boolean(reviewingProposalId)}>Не использовать</button>
+            </div>}
+            {proposalPendingRejection === visibleCalendarProposal.id && <section className="parent-confirm" role="alert"><strong>Не использовать эти рекомендации?</strong><p>Предложение исчезнет, но уже сохранённые вручную даты останутся.</p><div><button className="secondary-button" type="button" onClick={() => setProposalPendingRejection(null)} disabled={Boolean(reviewingProposalId)}>Отмена</button><button className="danger-button" type="button" onClick={() => void rejectCalendarProposal(visibleCalendarProposal)} disabled={Boolean(reviewingProposalId)}>{reviewingProposalId ? 'Сохраняем…' : 'Не использовать'}</button></div></section>}
+          </>}
+        </section>
         <form className="parent-exception-form" onSubmit={saveNonSchoolPeriod}>
           <h3 id="non-school-title">Каникулы и неучебные дни</h3>
           <p>В эти даты уроки не показываются, а рюкзак будет собран на ближайший фактический учебный день.</p>

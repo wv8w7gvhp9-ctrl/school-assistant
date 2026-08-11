@@ -1,2 +1,5 @@
 [functions.dispatch-push]
 verify_jwt = false
+
+[functions.sync-school-calendar]
+verify_jwt = false
