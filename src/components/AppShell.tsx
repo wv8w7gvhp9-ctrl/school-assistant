@@ -25,9 +25,13 @@ export function AppShell({ activeTab, onTabChange, onRefresh, children }: { acti
   const [refreshing, setRefreshing] = useState(false)
   useEffect(() => {
     if (!profileOpen) return
+    document.body.classList.add('sheet-open')
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') setProfileOpen(false) }
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.classList.remove('sheet-open')
+      window.removeEventListener('keydown', onKeyDown)
+    }
   }, [profileOpen])
 
   function canStartPull(target: EventTarget | null) {
@@ -89,6 +93,6 @@ export function AppShell({ activeTab, onTabChange, onRefresh, children }: { acti
         <Icon name={item.id} /><span>{item.label}</span>
       </button>)}
     </nav>
-    {profileOpen && <div className="sheet-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setProfileOpen(false) }}><section className="profile-sheet" role="dialog" aria-modal="true" aria-labelledby="child-profile-title"><div className="sheet-heading"><div><p className="eyebrow">Профиль ребёнка</p><h2 id="child-profile-title">{profile?.childName ?? 'Школьный помощник'}</h2></div><button type="button" className="sheet-close" aria-label="Закрыть профиль" onClick={() => setProfileOpen(false)}>×</button></div>{profile && <ChildStarHistory childId={profile.childId} />}<section className="child-notifications"><h3>Уведомления</h3><p>Здесь можно подключить напоминания только для этого устройства. Время меняет родитель.</p><PushNotificationSettings role="child" /></section></section></div>}
+    {profileOpen && <div className="sheet-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setProfileOpen(false) }}><section className="sheet-panel profile-sheet" role="dialog" aria-modal="true" aria-labelledby="child-profile-title"><div className="sheet-heading"><div><p className="eyebrow">Профиль ребёнка</p><h2 id="child-profile-title">{profile?.childName ?? 'Школьный помощник'}</h2></div><button type="button" className="sheet-close" aria-label="Закрыть профиль" onClick={() => setProfileOpen(false)}>×</button></div>{profile && <ChildStarHistory childId={profile.childId} />}<section className="child-notifications"><h3>Уведомления</h3><p>Здесь можно подключить напоминания только для этого устройства. Время меняет родитель.</p><PushNotificationSettings role="child" /></section></section></div>}
   </div>
 }

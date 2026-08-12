@@ -124,8 +124,12 @@ p { color: var(--color-text-muted); font-size: 16px; line-height: 1.5; }
 .diary-draft-note.warning { color: var(--color-warning); background: var(--color-warning-soft); }
 .diary-draft-note.error { color: var(--color-danger); background: var(--color-danger-soft); }
 .sheet-backdrop { position: fixed; z-index: 4; inset: 0; display: grid; align-items: end; overflow: hidden; background: rgb(7 28 66 / 30%); }
+.sheet-panel { position: relative; min-width: 0; max-width: 100%; overflow-x: hidden; }
+.sheet-panel::before { position: absolute; top: var(--space-2); left: 50%; width: 44px; height: 4px; border-radius: var(--radius-pill); background: var(--color-border-strong); content: ''; transform: translateX(-50%); }
+.sheet-panel > *, .sheet-panel form, .sheet-panel form > *, .sheet-panel .parent-form-grid, .sheet-panel .parent-form-grid > * { min-width: 0; max-width: 100%; }
+.sheet-panel :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) { min-width: 0; max-width: 100%; }
+.sheet-panel :where(input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], input[type="week"]) { display: block; inline-size: 100%; inline-size: -webkit-fill-available; min-inline-size: 0; max-inline-size: 100%; }
 .reading-diary-sheet { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(100%, 680px); height: calc(100dvh - max(12px, env(safe-area-inset-top))); margin: 0 auto; padding: var(--space-5) var(--space-5) 0; overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-xl) var(--radius-xl) 0 0; background: var(--color-surface); box-shadow: var(--shadow-raised); }
-.reading-diary-sheet::before { position: absolute; top: var(--space-2); left: 50%; width: 44px; height: 4px; border-radius: var(--radius-pill); background: var(--color-border-strong); content: ''; transform: translateX(-50%); }
 .reading-diary-scroll { min-height: 0; padding: 0 2px calc(var(--space-6) + env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .reading-diary-scroll textarea { min-height: 112px; resize: vertical; }
 .sheet-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }

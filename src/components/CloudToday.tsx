@@ -133,6 +133,17 @@ export function CloudToday() {
   useEffect(() => { void loadToday() }, [online, profile])
 
   useEffect(() => {
+    if (!backpackOpen) return
+    document.body.classList.add('sheet-open')
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') setBackpackOpen(false) }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.classList.remove('sheet-open')
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [backpackOpen])
+
+  useEffect(() => {
     if (!profile) return
     const handleSync = (event: Event) => {
       const detail = (event as CustomEvent<{ childId: string; results: OfflineSyncResult[] }>).detail
@@ -242,7 +253,7 @@ export function CloudToday() {
       <button className="primary-button backpack-open-button" type="button" onClick={() => setBackpackOpen(true)} disabled={!backpackMeta} aria-label={`${backpackButtonLabel}. ${backpackButtonDetail}`}><Icon name="backpack" /><span className="backpack-button-copy"><strong>{backpackButtonLabel}</strong><small>{backpackButtonDetail}</small></span><Icon name="chevron" /></button>
       {backpackError ? <div className="auth-message error" role="alert"><p>Не получилось подготовить рюкзак. Остальные данные дня доступны.</p><button type="button" className="secondary-button" onClick={() => void loadToday()}>Повторить</button></div> : !backpackMeta && <p className="screen-note">Ближайший учебный день пока не найден.</p>}
     </>}
-    {backpackOpen && backpackMeta && <div className="sheet-backdrop"><section className="backpack-sheet" role="dialog" aria-modal="true" aria-labelledby="backpack-title"><div className="sheet-heading"><div><p className="eyebrow">На {formatFullRussianDate(backpackMeta.day).toLowerCase()}</p><h2 id="backpack-title">Собрать рюкзак</h2></div><button type="button" className="sheet-close" aria-label="Закрыть рюкзак" onClick={() => setBackpackOpen(false)}>×</button></div>
+    {backpackOpen && backpackMeta && <div className="sheet-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setBackpackOpen(false) }}><section className="sheet-panel backpack-sheet" role="dialog" aria-modal="true" aria-labelledby="backpack-title"><div className="sheet-heading"><div><p className="eyebrow">На {formatFullRussianDate(backpackMeta.day).toLowerCase()}</p><h2 id="backpack-title">Собрать рюкзак</h2></div><button type="button" className="sheet-close" aria-label="Закрыть рюкзак" onClick={() => setBackpackOpen(false)}>×</button></div>
       {backpack.length === 0 ? <div className="child-cloud-state"><strong>Список вещей пуст</strong><p>Попроси родителя добавить вещи к урокам.</p></div> : <div className="backpack-items">{backpack.map((item) => <label className={`backpack-item ${queuedItemIds.has(item.item_id) ? 'pending-sync' : ''}`} key={item.item_id}><input type="checkbox" checked={item.checked} disabled={backpackMeta.status !== 'packing' || submissionQueued || Boolean(busyItemId) || (online && queuedItemIds.has(item.item_id))} onChange={() => void toggleItem(item)} /><span><strong>{item.item_text}</strong><small>{item.subject_titles.join(' · ')}</small>{queuedItemIds.has(item.item_id) && <small className="pending-sync-label">Ждёт отправки</small>}</span></label>)}</div>}
       <div className="backpack-progress"><span>Собрано {progress.checked} из {progress.total}</span><progress max={Math.max(progress.total, 1)} value={progress.checked} /></div>
       {message && <p className={`auth-message ${message.kind}`} role={message.kind === 'error' ? 'alert' : 'status'}>{message.text}</p>}
