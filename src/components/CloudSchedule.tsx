@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { childWeekdays, isoDateForWeekday, mondayFirstWeekday, schoolDayMessage, timeRange, type CloudLesson, type SchoolDayStatus } from '../domain/childSchedule'
+import { childWeekdays, isoDateForWeekday, lessonStatusLabel, mondayFirstWeekday, schoolDayMessage, timeRange, type CloudLesson, type SchoolDayStatus } from '../domain/childSchedule'
 import { supabase } from '../lib/supabase'
 import { loadWithOfflineFallback, offlineKey } from '../lib/offlineCache'
 import { useChildSession } from './ChildSession'
@@ -64,6 +64,6 @@ export function CloudSchedule() {
     {state === 'loading' && <p className="child-cloud-state" role="status">Загружаем твоё расписание…</p>}
     {state === 'error' && <p className="auth-message error" role="alert">{online ? 'Не получилось загрузить расписание. Попробуй ещё раз.' : 'Для этого дня ещё нет сохранённого расписания.'}</p>}
     {state === 'ready' && dayLessons.length === 0 && <div className={`child-cloud-state ${nonSchoolMessage ? 'non-school-state' : ''}`}><strong>{nonSchoolMessage?.title ?? 'На этот день уроков пока нет'}</strong>{nonSchoolMessage && <p>{nonSchoolMessage.description}</p>}</div>}
-    {state === 'ready' && dayLessons.length > 0 && <div className="timeline">{dayLessons.map((lesson) => <article className={`lesson-card ${lesson.status === 'cancelled' ? 'cancelled-lesson' : ''}`} key={`${lesson.weekday}-${lesson.lesson_order}`}><time>{timeRange(lesson)}</time><span className="timeline-dot" /><div><p className="eyebrow">{lesson.status === 'cancelled' ? 'Урок отменён' : lesson.status === 'replacement' ? 'Замена' : `Урок ${lesson.lesson_order}`}</p><h2>{lesson.subject_title}</h2></div>{lesson.status !== 'cancelled' && lesson.things.length > 0 && <p className="lesson-things">Взять: {lesson.things.join(' · ')}</p>}</article>)}</div>}
+    {state === 'ready' && dayLessons.length > 0 && <div className="timeline">{dayLessons.map((lesson) => <article className={`lesson-card ${lesson.status === 'cancelled' ? 'cancelled-lesson' : ''}`} key={`${lesson.weekday}-${lesson.lesson_order}-${lesson.status}-${lesson.subject_title}`}><time>{timeRange(lesson)}</time><span className="timeline-dot" /><div><p className="eyebrow">{lessonStatusLabel(lesson)}</p><h2>{lesson.subject_title}</h2></div>{lesson.status !== 'cancelled' && lesson.things.length > 0 && <p className="lesson-things">Взять: {lesson.things.join(' · ')}</p>}</article>)}</div>}
   </section>
 }

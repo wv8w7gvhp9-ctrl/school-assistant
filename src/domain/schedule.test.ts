@@ -5,6 +5,7 @@ import {
   parseThings,
   schoolYearDefaults,
   validateLessonDraft,
+  validateLessonExceptionDate,
   validateNonSchoolPeriod,
   validateOptionalTimeRange,
 } from './schedule'
@@ -25,6 +26,20 @@ describe('расписание', () => {
 
   it('требует обе границы времени для замены', () => {
     expect(validateOptionalTimeRange('08:00', '')).toBe('Укажите и начало, и окончание замены.')
+  })
+
+  it('не разрешает разовое изменение за границами учебного года', () => {
+    expect(validateLessonExceptionDate('2027-06-01', {
+      starts_on: '2026-09-01',
+      ends_on: '2027-05-31',
+    })).toBe('Дата должна находиться внутри выбранного учебного года.')
+  })
+
+  it('принимает дату разового урока внутри учебного года', () => {
+    expect(validateLessonExceptionDate('2026-10-10', {
+      starts_on: '2026-09-01',
+      ends_on: '2027-05-31',
+    })).toBeNull()
   })
 
   it('не разрешает каникулы за границами выбранного учебного года', () => {

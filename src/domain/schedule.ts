@@ -5,6 +5,11 @@ export type LessonDraft = {
   endsAt: string
 }
 
+export type AcademicYearRange = {
+  starts_on: string
+  ends_on: string
+}
+
 export type NonSchoolReason = 'weekend_override' | 'holiday' | 'vacation'
 
 export type NonSchoolDay = {
@@ -43,6 +48,14 @@ export function validateLessonDraft(draft: LessonDraft): string | null {
 export function validateOptionalTimeRange(startsAt: string, endsAt: string): string | null {
   if (Boolean(startsAt) !== Boolean(endsAt)) return 'Укажите и начало, и окончание замены.'
   if (startsAt && endsAt && endsAt <= startsAt) return 'Время окончания должно быть позже времени начала.'
+  return null
+}
+
+export function validateLessonExceptionDate(day: string, academicYear: AcademicYearRange): string | null {
+  if (!day) return 'Выберите дату изменения.'
+  if (day < academicYear.starts_on || day > academicYear.ends_on) {
+    return 'Дата должна находиться внутри выбранного учебного года.'
+  }
   return null
 }
 

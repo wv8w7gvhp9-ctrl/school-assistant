@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isoDateForWeekday, mondayFirstWeekday, schoolDayMessage, timeRange } from './childSchedule'
+import { isoDateForWeekday, lessonStatusLabel, mondayFirstWeekday, schoolDayMessage, timeRange } from './childSchedule'
 
 describe('детское расписание', () => {
   it('переносит воскресенье на понедельник для выбора расписания', () => {
@@ -20,5 +20,9 @@ describe('детское расписание', () => {
 
   it('объясняет ребёнку каникулы без технических терминов', () => {
     expect(schoolDayMessage('vacation')).toEqual({ title: 'Сейчас каникулы', description: 'Уроков нет. Приятного отдыха!' })
+  })
+
+  it('понятно обозначает разовый дополнительный урок', () => {
+    expect(lessonStatusLabel({ lesson_order: 6, status: 'extra' })).toBe('Дополнительный урок 6')
   })
 })

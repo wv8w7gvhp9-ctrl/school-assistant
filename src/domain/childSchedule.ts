@@ -25,6 +25,13 @@ export function schoolDayMessage(reason: SchoolDayReason | null | undefined) {
   return reason ? schoolDayMessages[reason] : null
 }
 
+export function lessonStatusLabel(lesson: Pick<CloudLesson, 'lesson_order' | 'status'>): string {
+  if (lesson.status === 'cancelled') return 'Урок отменён'
+  if (lesson.status === 'replacement') return 'Замена'
+  if (lesson.status === 'extra') return `Дополнительный урок ${lesson.lesson_order}`
+  return `Урок ${lesson.lesson_order}`
+}
+
 export function isoDateForWeekday(todayIso: string, todayWeekday: number, weekday: number): string {
   const date = new Date(`${todayIso}T00:00:00Z`)
   date.setUTCDate(date.getUTCDate() + weekday - todayWeekday)
