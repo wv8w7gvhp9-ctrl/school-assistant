@@ -213,6 +213,14 @@ p { color: var(--color-text-muted); font-size: 16px; line-height: 1.5; }
 @media (max-width: 374px) { .offline-banner { align-items: flex-start; flex-direction: column; } }
 @media (max-width: 374px) { .sync-banner { align-items: flex-start; flex-direction: column; } }
 
+/* Новая версия PWA применяется только по явному действию, чтобы не потерять ввод формы. */
+.pwa-update-banner { position: fixed; z-index: 3; right: var(--space-4); bottom: calc(104px + env(safe-area-inset-bottom)); left: var(--space-4); display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); width: min(calc(100% - (var(--space-4) * 2)), 680px); margin-inline: auto; padding: var(--space-3) var(--space-4); border: 1px solid var(--color-accent-gold); border-radius: var(--radius-lg); color: var(--color-text); background: var(--color-soft-apricot); box-shadow: var(--shadow-raised); }
+.pwa-update-banner > div { display: grid; gap: var(--space-1); min-width: 0; }
+.pwa-update-banner p { color: var(--color-text-muted); font-size: 14px; }
+.pwa-update-banner .secondary-button { width: auto; min-width: 168px; white-space: nowrap; }
+@media (max-width: 480px) { .pwa-update-banner { grid-template-columns: 1fr; }.pwa-update-banner .secondary-button { width: 100%; min-width: 0; } }
+@media (min-width: 768px) { .pwa-update-banner { bottom: var(--space-5); } }
+
 /* Push-уведомления: настройки родителя и состояние устройства ребёнка. */
 .parent-notifications { display: grid; gap: var(--space-4); margin-top: var(--space-5); padding-top: var(--space-5); border-top: 1px solid var(--color-border); }
 .parent-notifications h2, .parent-notifications h3, .child-notifications h3 { margin: 0; }

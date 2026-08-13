@@ -3,6 +3,7 @@ import { AppShell } from './components/AppShell'
 import { AuthGate } from './components/AuthGate'
 import { useChildSession } from './components/ChildSession'
 import { Icon } from './components/Icon'
+import { PwaUpdateBanner } from './components/PwaUpdateBanner'
 import { SectionTitle, StarCounter, StatusChip } from './components/UI'
 import { books, child, clubs, homework, todayLessons } from './data/demo'
 import type { ChildTab } from './domain/types'
@@ -92,5 +93,5 @@ export function App() {
   const [activeTab, setActiveTab] = useState<ChildTab>('today')
   const [refreshVersion, setRefreshVersion] = useState(0)
   const Screen = screens[activeTab]
-  return <AuthGate><AppShell activeTab={activeTab} onTabChange={setActiveTab} onRefresh={() => setRefreshVersion((version) => version + 1)}><Suspense fallback={<p className="child-cloud-state" role="status">Открываем раздел…</p>}><Screen key={`${activeTab}-${refreshVersion}`} /></Suspense></AppShell></AuthGate>
+  return <><AuthGate><AppShell activeTab={activeTab} onTabChange={setActiveTab} onRefresh={() => setRefreshVersion((version) => version + 1)}><Suspense fallback={<p className="child-cloud-state" role="status">Открываем раздел…</p>}><Screen key={`${activeTab}-${refreshVersion}`} /></Suspense></AppShell></AuthGate><PwaUpdateBanner /></>
 }
