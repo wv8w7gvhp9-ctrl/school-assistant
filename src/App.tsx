@@ -6,6 +6,7 @@ import { Icon } from './components/Icon'
 import { PwaUpdateBanner } from './components/PwaUpdateBanner'
 import { SectionTitle, StarCounter, StatusChip } from './components/UI'
 import { books, child, clubs, homework, todayLessons } from './data/demo'
+import { childTabFromSearch, searchForChildTab } from './domain/navigation'
 import type { ChildTab } from './domain/types'
 
 const CloudToday = lazy(() => import('./components/CloudToday').then((module) => ({ default: module.CloudToday })))
@@ -90,8 +91,13 @@ function DemoClubs() {
 const screens: Record<ChildTab, () => ReactElement> = { today: Today, schedule: Schedule, homework: Homework, books: Books, clubs: Clubs }
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<ChildTab>('today')
+  const [activeTab, setActiveTab] = useState<ChildTab>(() => childTabFromSearch(window.location.search))
   const [refreshVersion, setRefreshVersion] = useState(0)
   const Screen = screens[activeTab]
-  return <><AuthGate><AppShell activeTab={activeTab} onTabChange={setActiveTab} onRefresh={() => setRefreshVersion((version) => version + 1)}><Suspense fallback={<p className="child-cloud-state" role="status">Открываем раздел…</p>}><Screen key={`${activeTab}-${refreshVersion}`} /></Suspense></AppShell></AuthGate><PwaUpdateBanner /></>
+  const changeTab = (tab: ChildTab) => {
+    setActiveTab(tab)
+    const nextSearch = searchForChildTab(window.location.search, tab)
+    window.history.replaceState(null, '', `${window.location.pathname}${nextSearch}${window.location.hash}`)
+  }
+  return <><AuthGate><AppShell activeTab={activeTab} onTabChange={changeTab} onRefresh={() => setRefreshVersion((version) => version + 1)}><Suspense fallback={<p className="child-cloud-state" role="status">Открываем раздел…</p>}><Screen key={`${activeTab}-${refreshVersion}`} /></Suspense></AppShell></AuthGate><PwaUpdateBanner /></>
 }

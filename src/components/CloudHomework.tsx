@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { filterHomework, homeworkProgress, preferredTimeLabel, samaraIsoDate, type CloudHomeworkAssignment, type HomeworkFilter } from '../domain/homework'
 import { supabase } from '../lib/supabase'
 import { loadWithOfflineFallback, offlineKey } from '../lib/offlineCache'
@@ -7,6 +7,7 @@ import { Icon } from './Icon'
 import { StatusChip } from './UI'
 import { useChildSession } from './ChildSession'
 import { OfflineDataNote, useOnlineStatus } from './NetworkStatus'
+import { useHomeworkLiveUpdates } from './useHomeworkLiveUpdates'
 
 const filters: HomeworkFilter[] = ['Сегодня', 'На завтра', 'Выполнено']
 
@@ -21,9 +22,9 @@ export function CloudHomework() {
   const [cachedAt, setCachedAt] = useState<string | null>(null)
   const [queuedIds, setQueuedIds] = useState<Set<string>>(new Set())
 
-  async function loadHomework() {
+  const loadHomework = useCallback(async (showLoading = true) => {
     if (!supabase || !profile) return
-    setState('loading')
+    if (showLoading) setState('loading')
     const result = await loadWithOfflineFallback<CloudHomeworkAssignment[]>(offlineKey.homework(profile.childId), () => supabase!.rpc('get_my_homework_v2'), online)
     if (result.source === 'none') {
       setState('error')
@@ -32,9 +33,10 @@ export function CloudHomework() {
     setAssignments(result.data ?? [])
     setCachedAt(result.source === 'cache' ? result.savedAt : null)
     setState('ready')
-  }
+  }, [online, profile])
 
-  useEffect(() => { void loadHomework() }, [online, profile])
+  useEffect(() => { void loadHomework() }, [loadHomework])
+  useHomeworkLiveUpdates(profile?.childId, online, () => loadHomework(false))
 
   useEffect(() => {
     if (!profile) return

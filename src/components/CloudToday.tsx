@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { schoolDayMessage, type CloudLesson, type SchoolDayStatus } from '../domain/childSchedule'
 import { clubTimeRange, type ClubOccurrence } from '../domain/clubs'
 import { samaraIsoDate, type CloudHomeworkAssignment } from '../domain/homework'
@@ -10,6 +10,7 @@ import { useChildSession } from './ChildSession'
 import { Icon } from './Icon'
 import { OfflineDataNote, useOnlineStatus } from './NetworkStatus'
 import { SectionTitle, StarCounter, StatusChip } from './UI'
+import { useHomeworkLiveUpdates } from './useHomeworkLiveUpdates'
 
 type BackpackResponseRow = {
   checklist_id: string
@@ -61,9 +62,9 @@ export function CloudToday() {
     }
   }
 
-  async function loadToday() {
+  const loadToday = useCallback(async (showLoading = true) => {
     if (!supabase || !profile) return
-    setState('loading')
+    if (showLoading) setState('loading')
     const [lessonResult, schoolDayResult, homeworkResult, clubResult, backpackResult, starResult, pendingBackpackMutations] = await Promise.all([
       loadWithOfflineFallback<CloudLesson[]>(offlineKey.schedule(profile.childId, today), () => supabase!.rpc('get_my_schedule_for_date', { input_day: today }), online),
       loadWithOfflineFallback<SchoolDayStatus[]>(offlineKey.schoolDayStatus(profile.childId, today), () => supabase!.rpc('get_my_school_day_status', { input_day: today }), online),
@@ -128,9 +129,10 @@ export function CloudToday() {
     const cachedResult = [lessonResult, schoolDayResult, homeworkResult, clubResult, backpackResult, starResult].find((result) => result.source === 'cache')
     setCachedAt(cachedResult?.savedAt ?? null)
     setState('ready')
-  }
+  }, [online, profile, today])
 
-  useEffect(() => { void loadToday() }, [online, profile])
+  useEffect(() => { void loadToday() }, [loadToday])
+  useHomeworkLiveUpdates(profile?.childId, online, () => loadToday(false))
 
   useEffect(() => {
     if (!backpackOpen) return
