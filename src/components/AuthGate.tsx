@@ -8,10 +8,10 @@ import { Turnstile } from './Turnstile'
 import { ParentStarHistory } from './StarHistory'
 
 const ParentScheduleEditor = lazy(() => import('./ParentScheduleEditor').then((module) => ({ default: module.ParentScheduleEditor })))
+const ParentReviewQueue = lazy(() => import('./ParentReviewQueue').then((module) => ({ default: module.ParentReviewQueue })))
 const ParentHomeworkEditor = lazy(() => import('./ParentHomeworkEditor').then((module) => ({ default: module.ParentHomeworkEditor })))
 const ParentBooksEditor = lazy(() => import('./ParentBooksEditor').then((module) => ({ default: module.ParentBooksEditor })))
 const ParentClubsEditor = lazy(() => import('./ParentClubsEditor').then((module) => ({ default: module.ParentClubsEditor })))
-const ParentBackpackReview = lazy(() => import('./ParentBackpackReview').then((module) => ({ default: module.ParentBackpackReview })))
 const ParentNotificationSettings = lazy(() => import('./ParentNotificationSettings').then((module) => ({ default: module.ParentNotificationSettings })))
 const ParentChildDevices = lazy(() => import('./ParentChildDevices').then((module) => ({ default: module.ParentChildDevices })))
 const ParentAcademicHistory = lazy(() => import('./ParentAcademicHistory').then((module) => ({ default: module.ParentAcademicHistory })))
@@ -36,6 +36,7 @@ function ParentSignedIn({ session }: { session: Session }) {
   const [familyMessage, setFamilyMessage] = useState('')
   const [linkCode, setLinkCode] = useState<LinkCode | null>(null)
   const [creatingCode, setCreatingCode] = useState(false)
+  const [reviewVersion, setReviewVersion] = useState(0)
 
   useEffect(() => {
     if (!supabase) return
@@ -89,7 +90,7 @@ function ParentSignedIn({ session }: { session: Session }) {
     {!loadingFamily && !family && <form className="auth-form" onSubmit={createFamily}><label htmlFor="child-name">Как зовут ребёнка?</label><p className="field-help">Достаточно имени или домашнего псевдонима. Другие личные данные не нужны.</p><input id="child-name" name="child-name" type="text" autoComplete="off" maxLength={48} value={childName} onChange={(event) => { setChildName(event.target.value); setFamilyError('') }} placeholder="Например, Миша" required /><button className="primary-button" type="submit" disabled={creatingFamily}>{creatingFamily ? 'Создаём профиль…' : 'Создать семейный профиль'}</button></form>}
     {familyMessage && <p className="auth-message success" role="status">{familyMessage}</p>}
     {family && <div className="family-success" role="status"><strong>Семья создана</strong><p>Профиль ребёнка: {family.child_name}.</p></div>}
-    {family && <Suspense fallback={<p className="auth-loading" role="status">Открываем данные семьи…</p>}><ParentScheduleEditor familyId={family.family_id} /><ParentHomeworkEditor familyId={family.family_id} childId={family.child_id} /><ParentBooksEditor familyId={family.family_id} childId={family.child_id} /><ParentClubsEditor familyId={family.family_id} childId={family.child_id} /><ParentBackpackReview /><ParentStarHistory childId={family.child_id} childName={family.child_name} /><ParentAcademicHistory childName={family.child_name} /><ParentNotificationSettings /><ParentChildDevices /></Suspense>}
+    {family && <Suspense fallback={<p className="auth-loading" role="status">Открываем данные семьи…</p>}><ParentReviewQueue familyId={family.family_id} childId={family.child_id} childName={family.child_name} onReviewed={() => setReviewVersion((current) => current + 1)} /><ParentScheduleEditor familyId={family.family_id} /><ParentHomeworkEditor familyId={family.family_id} childId={family.child_id} reviewVersion={reviewVersion} /><ParentBooksEditor familyId={family.family_id} childId={family.child_id} reviewVersion={reviewVersion} /><ParentClubsEditor familyId={family.family_id} childId={family.child_id} /><ParentStarHistory childId={family.child_id} childName={family.child_name} reviewVersion={reviewVersion} /><ParentAcademicHistory childName={family.child_name} /><ParentNotificationSettings /><ParentChildDevices /></Suspense>}
     {family && <section className="link-code-panel"><h2>Подключить устройство ребёнка</h2><p>Откройте приложение на устройстве ребёнка, выберите «Подключить устройство ребёнка» и введите этот код.</p>{linkCode ? <div className="link-code" role="status"><strong>{linkCode.display_code}</strong><span>Код действует 15 минут и сработает только один раз.</span></div> : <button type="button" className="primary-button" onClick={createLinkCode} disabled={creatingCode}>{creatingCode ? 'Создаём код…' : 'Получить код подключения'}</button>}</section>}
     {family && <Suspense fallback={<p className="auth-loading" role="status">Открываем настройки семьи…</p>}><ParentFamilyDeletion childId={family.child_id} childName={family.child_name} onDeleted={finishFamilyDeletion} /></Suspense>}
     {familyError && <p className="auth-message error" role="alert">{familyError}</p>}

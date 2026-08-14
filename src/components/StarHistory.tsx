@@ -53,7 +53,7 @@ export function ChildStarHistory({ childId }: { childId: string }) {
   </section>
 }
 
-export function ParentStarHistory({ childId, childName }: { childId: string; childName: string }) {
+export function ParentStarHistory({ childId, childName, reviewVersion = 0 }: { childId: string; childName: string; reviewVersion?: number }) {
   const [events, setEvents] = useState<StarEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -78,7 +78,7 @@ export function ParentStarHistory({ childId, childName }: { childId: string; chi
       if (active) setError('Не удалось загрузить историю звёзд. Проверьте интернет и попробуйте ещё раз.')
     }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [loadHistory])
+  }, [loadHistory, reviewVersion])
 
   function prepareCorrection(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

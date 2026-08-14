@@ -1,6 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { addDays, samaraIsoDate, validateHomeworkDraft, type HomeworkDraft } from '../domain/homework'
-import { homeworkApprovalMessage } from '../domain/stars'
 import type { HomeworkStatus } from '../domain/types'
 import { supabase } from '../lib/supabase'
 import { StatusChip } from './UI'
@@ -25,7 +24,7 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Samara' }).format(new Date(`${value}T12:00:00+04:00`))
 }
 
-export function ParentHomeworkEditor({ familyId, childId }: { familyId: string; childId: string }) {
+export function ParentHomeworkEditor({ familyId, childId, reviewVersion = 0 }: { familyId: string; childId: string; reviewVersion?: number }) {
   const [assignments, setAssignments] = useState<ParentHomework[]>([])
   const [draft, setDraft] = useState<HomeworkDraft>(emptyDraft)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -56,7 +55,7 @@ export function ParentHomeworkEditor({ familyId, childId }: { familyId: string; 
       if (active) setError('Не удалось загрузить домашние задания. Проверьте интернет и попробуйте ещё раз.')
     }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [familyId, childId])
+  }, [familyId, childId, reviewVersion])
 
   async function findOrCreateSubject(title: string) {
     if (!supabase) throw new Error('Cloud is unavailable')
@@ -120,27 +119,11 @@ export function ParentHomeworkEditor({ familyId, childId }: { familyId: string; 
     setBusyId(null)
   }
 
-  async function reviewHomework(id: string, decision: 'approved' | 'needs_revision') {
-    if (!supabase || busyId) return
-    setBusyId(id)
-    setError('')
-    setMessage('')
-    const { data, error: reviewError } = await supabase.rpc('review_homework', { input_homework_id: id, input_decision: decision })
-    if (reviewError) setError('Не удалось сохранить решение. Обновите список и попробуйте ещё раз.')
-    else {
-      setAssignments((current) => current.map((assignment) => assignment.id === id ? { ...assignment, status: decision } : assignment))
-      const starsAwarded = Number((data?.[0] as { stars_awarded?: number } | undefined)?.stars_awarded ?? 0)
-      setMessage(decision === 'approved' ? homeworkApprovalMessage(starsAwarded) : 'Задание возвращено на доработку.')
-    }
-    setBusyId(null)
-  }
-
-  const pending = assignments.filter((assignment) => assignment.status === 'pending_review')
   const rest = assignments.filter((assignment) => assignment.status !== 'pending_review')
 
   return <section className="parent-homework" aria-labelledby="parent-homework-title">
     <div className="parent-section-heading"><div><p className="eyebrow">Для родителя</p><h2 id="parent-homework-title">Домашка</h2></div></div>
-    <p>Добавьте задание, а после выполнения подтвердите его или верните на доработку.</p>
+    <p>Добавьте или измените задание. Выполненные работы появляются в единой очереди «Проверка» выше.</p>
     <form className="auth-form parent-homework-form" onSubmit={saveHomework}>
       <h3>{editingId ? 'Изменить задание' : 'Добавить задание'}</h3>
       <label htmlFor="homework-subject">Предмет</label><input id="homework-subject" type="text" maxLength={80} value={draft.subject} onChange={(event) => setDraft((current) => ({ ...current, subject: event.target.value }))} placeholder="Например, Математика" required />
@@ -152,7 +135,6 @@ export function ParentHomeworkEditor({ familyId, childId }: { familyId: string; 
     {loading && <p className="auth-loading" role="status">Загружаем домашние задания…</p>}
     {error && <p className="auth-message error" role="alert">{error}</p>}
     {message && <p className="auth-message success" role="status">{message}</p>}
-    {!loading && pending.length > 0 && <div className="parent-homework-list"><h3>Ждут проверки</h3>{pending.map((homework) => <article className="parent-homework-row review" key={homework.id}><div className="parent-homework-heading"><strong>{subjectTitle(homework)}</strong><StatusChip status={homework.status} /></div><p>{homework.task}</p><span>К {formatDate(homework.due_on)}{homework.preferred_by ? ` · желательно до ${homework.preferred_by.slice(0, 5)}` : ''}</span><div className="parent-review-actions"><button type="button" className="success-button" disabled={Boolean(busyId)} onClick={() => void reviewHomework(homework.id, 'approved')}>{busyId === homework.id ? 'Сохраняем…' : 'Подтвердить'}</button><button type="button" className="secondary-button" disabled={Boolean(busyId)} onClick={() => void reviewHomework(homework.id, 'needs_revision')}>Вернуть на доработку</button></div></article>)}</div>}
-    {!loading && <div className="parent-homework-list"><h3>Все задания</h3>{assignments.length === 0 ? <p className="parent-empty">Заданий пока нет. Добавьте первое задание выше.</p> : rest.map((homework) => <article className="parent-homework-row" key={homework.id}><div className="parent-homework-heading"><strong>{subjectTitle(homework)}</strong><StatusChip status={homework.status} /></div><p>{homework.task}</p><span>К {formatDate(homework.due_on)}{homework.preferred_by ? ` · желательно до ${homework.preferred_by.slice(0, 5)}` : ''}</span><div className="parent-lesson-actions"><button type="button" onClick={() => beginEditing(homework)}>Изменить</button><button type="button" onClick={() => setDeletingId(homework.id)}>Удалить</button></div>{deletingId === homework.id && <div className="parent-confirm"><p>Удалить это задание? Оно исчезнет и на устройстве ребёнка.</p><div><button type="button" className="secondary-button" onClick={() => setDeletingId(null)}>Оставить</button><button type="button" className="danger-button" disabled={busyId === homework.id} onClick={() => void deleteHomework(homework.id)}>{busyId === homework.id ? 'Удаляем…' : 'Удалить'}</button></div></div>}</article>)}</div>}
+    {!loading && <div className="parent-homework-list"><h3>Все задания</h3>{assignments.length === 0 ? <p className="parent-empty">Заданий пока нет. Добавьте первое задание выше.</p> : rest.length === 0 ? <p className="parent-empty">Все задания сейчас ожидают решения в очереди «Проверка».</p> : rest.map((homework) => <article className="parent-homework-row" key={homework.id}><div className="parent-homework-heading"><strong>{subjectTitle(homework)}</strong><StatusChip status={homework.status} /></div><p>{homework.task}</p><span>К {formatDate(homework.due_on)}{homework.preferred_by ? ` · желательно до ${homework.preferred_by.slice(0, 5)}` : ''}</span><div className="parent-lesson-actions"><button type="button" onClick={() => beginEditing(homework)}>Изменить</button><button type="button" onClick={() => setDeletingId(homework.id)}>Удалить</button></div>{deletingId === homework.id && <div className="parent-confirm"><p>Удалить это задание? Оно исчезнет и на устройстве ребёнка.</p><div><button type="button" className="secondary-button" onClick={() => setDeletingId(null)}>Оставить</button><button type="button" className="danger-button" disabled={busyId === homework.id} onClick={() => void deleteHomework(homework.id)}>{busyId === homework.id ? 'Удаляем…' : 'Удалить'}</button></div></div>}</article>)}</div>}
   </section>
 }
