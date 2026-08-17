@@ -14,7 +14,7 @@ type HomeworkReview = {
   task: string
   status: 'pending_review'
   updated_at: string
-  subject: { title: string } | { title: string }[] | null
+  subject_title: string
 }
 
 type ReviewQueueProps = {
@@ -22,10 +22,6 @@ type ReviewQueueProps = {
   childId: string
   childName: string
   onReviewed: () => void
-}
-
-function subjectTitle(homework: HomeworkReview) {
-  return Array.isArray(homework.subject) ? homework.subject[0]?.title ?? 'Предмет' : homework.subject?.title ?? 'Предмет'
 }
 
 function formatDate(value: string) {
@@ -56,7 +52,7 @@ export function ParentReviewQueue({ familyId, childId, childName, onReviewed }: 
     setBooks([])
     setBackpackRows([])
     const [homeworkResult, booksResult, backpackResult] = await Promise.all([
-      supabase.from('homework_assignments').select('id, due_on, preferred_by, task, status, updated_at, subject:subjects(title)').eq('family_id', familyId).eq('child_id', childId).eq('status', 'pending_review').order('updated_at'),
+      supabase.rpc('get_parent_homework_reviews'),
       supabase.from('books').select('id, title, author, status, started_on, finished_on, main_characters, summary, rating, review_status, updated_at').eq('family_id', familyId).eq('child_id', childId).eq('review_status', 'pending_review').order('updated_at'),
       supabase.rpc('get_parent_backpack_reviews'),
     ])
@@ -139,7 +135,7 @@ export function ParentReviewQueue({ familyId, childId, childName, onReviewed }: 
     {message && <p className="auth-message success" role="status">{message}</p>}
     {!loading && hasLoaded && total === 0 && failedSections.length === 0 && <div className="parent-empty review-empty"><strong>Всё проверено</strong><p>Новых работ от {childName} пока нет.</p><button type="button" className="text-button" onClick={() => void loadQueue()}>Обновить очередь</button></div>}
     <div className="review-list">
-      {homework.map((item) => <article className="review-card" key={`homework:${item.id}`}><div className="review-card-heading"><span className="review-kind">Домашка</span><StatusChip status="pending_review" /></div><h3>{subjectTitle(item)}</h3><p>{item.task}</p><small>К {formatDate(item.due_on)}{item.preferred_by ? ` · желательно до ${item.preferred_by.slice(0, 5)}` : ''}</small><div className="parent-review-actions"><button type="button" className="success-button" disabled={Boolean(busyKey) || !online} onClick={() => void reviewHomework(item.id, 'approved')}>{busyKey === `homework:${item.id}` ? 'Сохраняем…' : 'Подтвердить'}</button><button type="button" className="secondary-button" disabled={Boolean(busyKey) || !online} onClick={() => void reviewHomework(item.id, 'needs_revision')}>Вернуть на доработку</button></div></article>)}
+      {homework.map((item) => <article className="review-card" key={`homework:${item.id}`}><div className="review-card-heading"><span className="review-kind">Домашка</span><StatusChip status="pending_review" /></div><h3>{item.subject_title || 'Предмет'}</h3><p>{item.task}</p><small>К {formatDate(item.due_on)}{item.preferred_by ? ` · желательно до ${item.preferred_by.slice(0, 5)}` : ''}</small><div className="parent-review-actions"><button type="button" className="success-button" disabled={Boolean(busyKey) || !online} onClick={() => void reviewHomework(item.id, 'approved')}>{busyKey === `homework:${item.id}` ? 'Сохраняем…' : 'Подтвердить'}</button><button type="button" className="secondary-button" disabled={Boolean(busyKey) || !online} onClick={() => void reviewHomework(item.id, 'needs_revision')}>Вернуть на доработку</button></div></article>)}
       {books.map((book) => <article className="review-card" key={`book:${book.id}`}><div className="review-card-heading"><span className="review-kind">Книга</span><StatusChip status="pending_review" /></div><h3>{book.title}</h3><p>{book.author}</p>{book.main_characters && <p><strong>Ответ о героях:</strong> {book.main_characters}</p>}{book.summary && <p><strong>О книге:</strong> {book.summary}</p>}{book.rating && <p><strong>Оценка:</strong> {book.rating} из 5</p>}<button type="button" className="success-button" disabled={Boolean(busyKey) || !online} onClick={() => void reviewBook(book.id)}>{busyKey === `book:${book.id}` ? 'Подтверждаем…' : 'Подтвердить прочтение'}</button></article>)}
       {backpacks.map((backpack) => <article className="review-card" key={`backpack:${backpack.checklistId}`}><div className="review-card-heading"><span className="review-kind">Рюкзак</span><StatusChip status="pending_review" /></div><h3>Рюкзак собран</h3><p>На {formatFullRussianDate(backpack.targetDay).toLowerCase()}</p><ul>{backpack.items.map((item) => <li key={item.item_id}>{item.item_text}</li>)}</ul><button type="button" className="success-button" disabled={Boolean(busyKey) || !online} onClick={() => void reviewBackpack(backpack.checklistId)}>{busyKey === `backpack:${backpack.checklistId}` ? 'Подтверждаем…' : 'Подтвердить рюкзак'}</button></article>)}
     </div>

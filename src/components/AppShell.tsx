@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type TouchEvent as ReactTouchEvent } from 'react'
 import { pullRefreshDistance, pullRefreshThreshold, shouldRefreshAfterPull, type PullPoint } from '../domain/pullToRefresh'
+import { pwaUpdateStore } from '../domain/pwaUpdate'
 import type { ChildTab } from '../domain/types'
 import { useChildSession } from './ChildSession'
 import { Icon } from './Icon'
@@ -63,6 +64,7 @@ export function AppShell({ activeTab, onTabChange, onRefresh, children }: { acti
     setRefreshing(true)
     pullDistanceRef.current = pullRefreshThreshold
     setPullDistance(pullRefreshThreshold)
+    await pwaUpdateStore.checkForUpdate()
     onRefresh()
     await new Promise<void>((resolve) => window.setTimeout(resolve, 600))
     setRefreshing(false)

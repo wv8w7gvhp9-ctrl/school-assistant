@@ -10,7 +10,10 @@ const precacheUrls = precacheEntries.map((entry) => new URL(typeof entry === 'st
 
 sw.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(precacheUrls)))
-  void sw.skipWaiting()
+})
+
+sw.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') void sw.skipWaiting()
 })
 
 sw.addEventListener('activate', (event) => {

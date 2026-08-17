@@ -24,4 +24,18 @@ describe('обновление установленного приложения
     expect(activeListener).toHaveBeenCalledTimes(1)
     expect(removedListener).not.toHaveBeenCalled()
   })
+
+  it('проверяет и применяет ожидающее обновление через настроенные действия', async () => {
+    const store = createPwaUpdateStore()
+    const check = vi.fn()
+    const apply = vi.fn()
+
+    store.configureUpdateCheck(check)
+    await store.checkForUpdate()
+    store.notifyReady(apply)
+    await store.applyUpdate()
+
+    expect(check).toHaveBeenCalledTimes(1)
+    expect(apply).toHaveBeenCalledTimes(1)
+  })
 })
