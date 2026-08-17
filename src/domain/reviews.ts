@@ -38,3 +38,11 @@ export function reviewCountLabel(count: number) {
   if (last >= 2 && last <= 4) return `${count} решения`
   return `${count} решений`
 }
+
+export function reviewAwardMessage(kind: 'book' | 'backpack', starsAwarded: number) {
+  const subject = kind === 'book' ? 'Книга подтверждена' : 'Рюкзак подтверждён'
+  if (starsAwarded <= 0) return `${subject}. Звёзды за это основание уже были начислены.`
+  if (starsAwarded === 1) return `${subject}. Начислена одна звезда.`
+  if (starsAwarded === 3) return `${subject}. Начислены три звезды.`
+  return `${subject}. Начислено звёзд: ${starsAwarded}.`
+}

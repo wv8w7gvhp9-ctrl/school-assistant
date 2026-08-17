@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { groupBackpackReviews, reviewCountLabel, type BackpackReviewRow } from './reviews'
+import { groupBackpackReviews, reviewAwardMessage, reviewCountLabel, type BackpackReviewRow } from './reviews'
 
 const row = (checklistId: string, itemId: string): BackpackReviewRow => ({
   checklist_id: checklistId,
@@ -22,4 +22,10 @@ describe('единая очередь родительской проверки'
     'правильно подписывает количество %i',
     (count, label) => expect(reviewCountLabel(count)).toBe(label),
   )
+
+  it('показывает только фактически начисленные сервером звёзды', () => {
+    expect(reviewAwardMessage('book', 3)).toBe('Книга подтверждена. Начислены три звезды.')
+    expect(reviewAwardMessage('backpack', 1)).toBe('Рюкзак подтверждён. Начислена одна звезда.')
+    expect(reviewAwardMessage('book', 0)).toContain('уже были начислены')
+  })
 })
