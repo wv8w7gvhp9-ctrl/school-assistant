@@ -42,6 +42,18 @@ export function filterHomework(assignments: CloudHomeworkAssignment[], filter: H
   return assignments.filter((assignment) => assignment.due_on === dueOn)
 }
 
+export function homeworkNeedingRevision(assignments: CloudHomeworkAssignment[]) {
+  return assignments.filter((assignment) => assignment.status === 'needs_revision')
+}
+
+export function homeworkDueDateLabel(isoDate: string) {
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'Europe/Samara',
+  }).format(new Date(`${isoDate}T12:00:00+04:00`))
+}
+
 export function homeworkProgress(assignments: CloudHomeworkAssignment[]) {
   const complete = assignments.filter((assignment) => assignment.status === 'pending_review' || assignment.status === 'approved').length
   return { complete, total: assignments.length }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { filterHomework, homeworkProgress, preferredTimeLabel, samaraIsoDate, type CloudHomeworkAssignment, type HomeworkFilter } from '../domain/homework'
+import { filterHomework, homeworkDueDateLabel, homeworkNeedingRevision, homeworkProgress, preferredTimeLabel, samaraIsoDate, type CloudHomeworkAssignment, type HomeworkFilter } from '../domain/homework'
 import { supabase } from '../lib/supabase'
 import { loadWithOfflineFallback, offlineKey } from '../lib/offlineCache'
 import { enqueueHomeworkSubmission, listHomeworkMutations, notifyOfflineQueueChanged, offlineQueueSyncedEvent, type OfflineSyncResult } from '../lib/offlineQueue'
@@ -65,7 +65,8 @@ export function CloudHomework() {
   }, [online, profile])
 
   const today = samaraIsoDate()
-  const visible = useMemo(() => filterHomework(assignments, filter, today), [assignments, filter, today])
+  const revisions = useMemo(() => homeworkNeedingRevision(assignments), [assignments])
+  const visible = useMemo(() => filterHomework(assignments, filter, today).filter((assignment) => assignment.status !== 'needs_revision'), [assignments, filter, today])
   const todayAssignments = filterHomework(assignments, 'Сегодня', today)
   const cloudProgress = homeworkProgress(todayAssignments)
   const queuedToday = todayAssignments.filter((assignment) => queuedIds.has(assignment.id) && assignment.status !== 'pending_review' && assignment.status !== 'approved').length
@@ -96,12 +97,13 @@ export function CloudHomework() {
     setSubmittingId(null)
   }
 
-  function HomeworkCard({ assignment }: { assignment: CloudHomeworkAssignment }) {
+  function HomeworkCard({ assignment, showDueDate = false }: { assignment: CloudHomeworkAssignment; showDueDate?: boolean }) {
     const canSubmit = assignment.status === 'todo' || assignment.status === 'needs_revision'
     const queued = queuedIds.has(assignment.id)
     return <article className={`card homework-card homework-${assignment.status}`}>
       <div className="homework-meta"><span>{assignment.subject_title}</span>{queued ? <span className="status-chip pending_sync"><Icon name="clock" />Ждёт отправки</span> : <StatusChip status={assignment.status} />}</div>
       <h2>{assignment.task}</h2>
+      {showDueDate && <p>Срок: {homeworkDueDateLabel(assignment.due_on)}</p>}
       {preferredTimeLabel(assignment.preferred_by) && <p>{preferredTimeLabel(assignment.preferred_by)}</p>}
       {canSubmit && <button className="primary-button homework-submit" type="button" onClick={() => void submitForReview(assignment.id)} disabled={Boolean(submittingId) || queued}>{submittingId === assignment.id ? 'Сохраняем…' : queued ? 'Ждёт отправки' : 'Задание выполнено'}</button>}
     </article>
@@ -114,6 +116,7 @@ export function CloudHomework() {
     {state === 'loading' && <p className="child-cloud-state" role="status">Загружаем домашку…</p>}
     {state === 'error' && <div className="auth-message error" role="alert"><p>{online ? 'Не получилось загрузить домашку. Попробуй ещё раз.' : 'Сохранённой домашки на этом устройстве пока нет.'}</p><button type="button" className="secondary-button" onClick={() => void loadHomework()}>Повторить</button></div>}
     {message && <p className={`auth-message ${message.kind}`} role={message.kind === 'error' ? 'alert' : 'status'}>{message.text}</p>}
+    {state === 'ready' && revisions.length > 0 && <section className="approved-homework homework-revision-section" aria-labelledby="homework-revision-title"><h2 id="homework-revision-title">Нужно доделать</h2><p>Родитель вернул эти задания. Исправь работу и отправь ещё раз.</p><div className="homework-list">{revisions.map((assignment) => <HomeworkCard assignment={assignment} showDueDate key={`revision:${assignment.id}`} />)}</div></section>}
     {state === 'ready' && visible.length === 0 && <div className="child-cloud-state"><strong>{filter === 'Выполнено' ? 'Подтверждённых заданий пока нет' : 'На этот день домашки пока нет'}</strong><p>{filter === 'Выполнено' ? 'Они появятся здесь после проверки родителя.' : 'Можно спокойно заняться другими делами.'}</p></div>}
     {state === 'ready' && actionable.length > 0 && <div className="homework-list">{actionable.map((assignment) => <HomeworkCard assignment={assignment} key={assignment.id} />)}</div>}
     {state === 'ready' && approved.length > 0 && <section className="approved-homework"><h2>{filter === 'Выполнено' ? 'Подтверждено' : 'Уже подтверждено'}</h2><div className="homework-list">{approved.map((assignment) => <HomeworkCard assignment={assignment} key={assignment.id} />)}</div></section>}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addDays, filterHomework, homeworkProgress, preferredTimeLabel, samaraIsoDate, validateHomeworkDraft, type CloudHomeworkAssignment } from './homework'
+import { addDays, filterHomework, homeworkDueDateLabel, homeworkNeedingRevision, homeworkProgress, preferredTimeLabel, samaraIsoDate, validateHomeworkDraft, type CloudHomeworkAssignment } from './homework'
 
 const assignments: CloudHomeworkAssignment[] = [
   { id: '1', subject_title: 'Математика', due_on: '2026-08-05', preferred_by: null, task: '№ 4 и 5', status: 'todo' },
@@ -20,6 +20,12 @@ describe('облачная домашка ребёнка', () => {
     expect(filterHomework(assignments, 'Сегодня', '2026-08-05').map((item) => item.id)).toEqual(['1', '2'])
     expect(filterHomework(assignments, 'На завтра', '2026-08-05').map((item) => item.id)).toEqual(['3'])
     expect(filterHomework(assignments, 'Выполнено', '2026-08-05').map((item) => item.id)).toEqual(['3'])
+  })
+
+  it('не скрывает возвращённую работу, даже если её дата не сегодня и не завтра', () => {
+    const returned: CloudHomeworkAssignment = { id: '4', subject_title: 'Окружающий мир', due_on: '2026-09-01', preferred_by: null, task: 'Исправить ответы', status: 'needs_revision' }
+    expect(homeworkNeedingRevision([...assignments, returned]).map((item) => item.id)).toEqual(['4'])
+    expect(homeworkDueDateLabel(returned.due_on)).toBe('1 сентября')
   })
 
   it('считает отправленные на проверку задания выполненными ребёнком', () => {
