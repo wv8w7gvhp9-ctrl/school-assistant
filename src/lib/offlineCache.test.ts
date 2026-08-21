@@ -24,6 +24,12 @@ describe('ключи офлайн-снимков', () => {
     expect(isOfflineRecordForParent({ key: offlineKey.parentReviewQueue('parent-b', 'family-a') }, 'parent-a')).toBe(false)
   })
 
+  it('изолируют родительское расписание по сессии и семье', () => {
+    expect(offlineKey.parentSchedule('parent-a', 'family-a')).not.toBe(offlineKey.parentSchedule('parent-a', 'family-b'))
+    expect(offlineKey.parentSchedule('parent-a', 'family-a')).not.toBe(offlineKey.parentSchedule('parent-b', 'family-a'))
+    expect(isOfflineRecordForParent({ key: offlineKey.parentSchedule('parent-a', 'family-a') }, 'parent-a')).toBe(true)
+  })
+
   it('изолируют историю звёзд разных детей', () => {
     expect(offlineKey.starHistory('child-a')).not.toBe(offlineKey.starHistory('child-b'))
   })

@@ -19,8 +19,9 @@ import {
   isCalendarProposal,
   type SchoolCalendarProposal,
 } from '../domain/schoolCalendar'
+import { offlineKey, readOfflineSnapshot, saveOfflineSnapshot } from '../lib/offlineCache'
 import { supabase } from '../lib/supabase'
-import { useOnlineStatus } from './NetworkStatus'
+import { OfflineDataNote, useOnlineStatus } from './NetworkStatus'
 
 type AcademicYear = { id: string; starts_on: string; ends_on: string }
 type WeeklyLesson = {
@@ -45,6 +46,13 @@ type EditorLessonDraft = {
 
 type LessonExceptionKind = 'cancelled' | 'replacement' | 'extra'
 type ExceptionLessonDraft = { subject: string; lessonOrder: string; startsAt: string; endsAt: string; things: string }
+type ParentScheduleSnapshot = {
+  years: AcademicYear[]
+  selectedYearId: string
+  lessons: WeeklyLesson[]
+  nonSchoolDays: NonSchoolDay[]
+  calendarProposals: SchoolCalendarProposal[]
+}
 
 const emptyLessonDraft: EditorLessonDraft = { subject: '', weekday: '1', lessonOrder: '1', startsAt: '08:30', endsAt: '09:15', things: '' }
 
@@ -84,8 +92,9 @@ function LessonFields({ draft, setDraft }: { draft: EditorLessonDraft; setDraft:
   </>
 }
 
-export function ParentScheduleEditor({ familyId }: { familyId: string }) {
+export function ParentScheduleEditor({ parentUserId, familyId }: { parentUserId: string; familyId: string }) {
   const online = useOnlineStatus()
+  const cacheKey = offlineKey.parentSchedule(parentUserId, familyId)
   const defaults = useMemo(() => schoolYearDefaults(), [])
   const [years, setYears] = useState<AcademicYear[]>([])
   const [selectedYearId, setSelectedYearId] = useState('')
@@ -115,6 +124,16 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
   const [calendarProposals, setCalendarProposals] = useState<SchoolCalendarProposal[]>([])
   const [reviewingProposalId, setReviewingProposalId] = useState<string | null>(null)
   const [proposalPendingRejection, setProposalPendingRejection] = useState<string | null>(null)
+  const [cachedAt, setCachedAt] = useState<string | null>(null)
+  const [cloudSnapshotReady, setCloudSnapshotReady] = useState(false)
+
+  const applyOfflineSnapshot = (snapshot: ParentScheduleSnapshot) => {
+    setYears(snapshot.years)
+    setSelectedYearId(snapshot.selectedYearId)
+    setLessons(snapshot.lessons)
+    setNonSchoolDays(snapshot.nonSchoolDays)
+    setCalendarProposals(snapshot.calendarProposals)
+  }
 
   const loadYears = async () => {
     const client = supabase
@@ -128,14 +147,15 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
     if (requestError) throw requestError
     const nextYears = (data ?? []) as AcademicYear[]
     setYears(nextYears)
-    setSelectedYearId((current) => current || nextYears[0]?.id || '')
+    setSelectedYearId((current) => nextYears.some((year) => year.id === current) ? current : nextYears[0]?.id || '')
+    return nextYears
   }
 
   const loadLessons = async (yearId: string) => {
     const client = supabase
     if (!client || !yearId) {
       setLessons([])
-      return
+      return [] as WeeklyLesson[]
     }
     const { data, error: requestError } = await client
       .from('weekly_lessons')
@@ -146,7 +166,9 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
       .order('lesson_order')
 
     if (requestError) throw requestError
-    setLessons((data ?? []) as unknown as WeeklyLesson[])
+    const nextLessons = (data ?? []) as unknown as WeeklyLesson[]
+    setLessons(nextLessons)
+    return nextLessons
   }
 
   const loadNonSchoolDays = async (year: AcademicYear) => {
@@ -160,14 +182,16 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
       .lte('day', year.ends_on)
       .order('day')
     if (requestError) throw requestError
-    setNonSchoolDays((data ?? []) as NonSchoolDay[])
+    const nextDays = (data ?? []) as NonSchoolDay[]
+    setNonSchoolDays(nextDays)
+    return nextDays
   }
 
   const loadCalendarProposals = async (yearId: string) => {
     const client = supabase
     if (!client || !yearId) {
       setCalendarProposals([])
-      return
+      return [] as SchoolCalendarProposal[]
     }
     const { data, error: requestError } = await client.rpc('get_my_school_calendar_proposals', {
       input_academic_year_id: yearId,
@@ -176,29 +200,64 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
     const proposals = (data ?? []).filter(isCalendarProposal)
     if (proposals.length !== (data ?? []).length) throw new Error('Unexpected calendar proposal response')
     setCalendarProposals(proposals)
+    return proposals
   }
 
   useEffect(() => {
     let active = true
     setLoading(true)
     setError('')
-    void loadYears().catch(() => {
-      if (active) setError('Не удалось загрузить расписание. Проверьте интернет и попробуйте ещё раз.')
-    }).finally(() => {
+    setCloudSnapshotReady(false)
+    const restore = async () => {
+      const cached = await readOfflineSnapshot<ParentScheduleSnapshot>(cacheKey)
+      if (!active) return
+      if (cached) {
+        applyOfflineSnapshot(cached.data)
+        setCachedAt(cached.savedAt)
+        setError('')
+      } else {
+        setError(online ? 'Не удалось загрузить расписание. Проверьте интернет и попробуйте ещё раз.' : 'Нет интернета, а расписание ещё не сохранено на этом устройстве.')
+      }
+      setLoading(false)
+    }
+    if (!online) void restore()
+    else void loadYears().then(() => {
+      if (active) setCachedAt(null)
+    }).catch(() => void restore()).finally(() => {
       if (active) setLoading(false)
     })
     return () => { active = false }
-  }, [familyId])
+  }, [familyId, cacheKey, online])
 
   const selectedYear = years.find((year) => year.id === selectedYearId)
 
   useEffect(() => {
     if (!selectedYear) return
+    if (!online) return
+    let active = true
     setLoading(true)
-    void Promise.all([loadLessons(selectedYear.id), loadNonSchoolDays(selectedYear), loadCalendarProposals(selectedYear.id)]).catch(() => {
-      setError('Не удалось загрузить уроки и неучебные дни. Проверьте интернет и попробуйте ещё раз.')
-    }).finally(() => setLoading(false))
-  }, [selectedYearId, years])
+    setCloudSnapshotReady(false)
+    void Promise.all([loadLessons(selectedYear.id), loadNonSchoolDays(selectedYear), loadCalendarProposals(selectedYear.id)]).then(() => {
+      if (!active) return
+      setCachedAt(null)
+      setCloudSnapshotReady(true)
+      setError('')
+    }).catch(async () => {
+      const cached = await readOfflineSnapshot<ParentScheduleSnapshot>(cacheKey)
+      if (!active) return
+      if (cached?.data.selectedYearId === selectedYear.id) {
+        applyOfflineSnapshot(cached.data)
+        setCachedAt(cached.savedAt)
+        setError('')
+      } else setError('Не удалось загрузить уроки и неучебные дни. Проверьте интернет и попробуйте ещё раз.')
+    }).finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [selectedYearId, online, cacheKey, familyId])
+
+  useEffect(() => {
+    if (!online || !cloudSnapshotReady || loading || !selectedYear) return
+    void saveOfflineSnapshot(cacheKey, { years, selectedYearId, lessons, nonSchoolDays, calendarProposals } satisfies ParentScheduleSnapshot)
+  }, [cacheKey, calendarProposals, cloudSnapshotReady, lessons, loading, nonSchoolDays, online, selectedYear, selectedYearId, years])
 
   useEffect(() => {
     if (!selectedYear) return
@@ -218,6 +277,10 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
   async function createYear(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!supabase) return
+    if (!online) {
+      setError('Без интернета учебный год можно только просматривать.')
+      return
+    }
     if (!yearDraft.startsOn || !yearDraft.endsOn || yearDraft.endsOn < yearDraft.startsOn) {
       setError('Дата окончания учебного года должна быть позже даты начала.')
       return
@@ -257,6 +320,10 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
   async function createLesson(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!supabase || !selectedYearId) return
+    if (!online) {
+      setError('Без интернета расписание можно только просматривать.')
+      return
+    }
     const validationError = validateLessonDraft(lessonDraft)
     if (validationError) {
       setError(validationError)
@@ -334,6 +401,10 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
 
   async function deleteLesson() {
     if (!supabase || !lessonPendingDeletion || !selectedYearId) return
+    if (!online) {
+      setError('Без интернета расписание можно только просматривать.')
+      return
+    }
     setDeletingLesson(true)
     setError('')
     const { error: deleteError } = await supabase.from('weekly_lessons').delete().eq('id', lessonPendingDeletion.id).eq('family_id', familyId)
@@ -543,8 +614,10 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
   return <section className="parent-schedule" aria-labelledby="parent-schedule-title">
     <div className="parent-section-heading"><div><p className="eyebrow">Для родителя</p><h2 id="parent-schedule-title">Недельное расписание</h2></div></div>
     <p>Сначала выберите учебный год, затем добавьте уроки с понедельника по пятницу.</p>
+    {cachedAt && <OfflineDataNote savedAt={cachedAt} />}
+    {!online && years.length > 0 && <p className="auth-message warning" role="status">Сохранённое расписание доступно только для просмотра. Изменения вернутся после подключения к интернету.</p>}
     {loading && <p className="auth-loading" role="status">Загружаем расписание…</p>}
-    {!loading && years.length === 0 && <form className="auth-form" onSubmit={createYear}>
+    {!loading && online && years.length === 0 && <form className="auth-form" onSubmit={createYear}>
       <label htmlFor="year-start">Начало учебного года</label>
       <input id="year-start" type="date" value={yearDraft.startsOn} onChange={(event) => setYearDraft((current) => ({ ...current, startsOn: event.target.value }))} required />
       <label htmlFor="year-end">Окончание учебного года</label>
@@ -553,15 +626,15 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
     </form>}
     {!loading && years.length > 0 && <>
       <label className="parent-select-label" htmlFor="academic-year">Учебный год</label>
-      <select id="academic-year" className="parent-select" value={selectedYearId} disabled={Boolean(editingLessonId)} onChange={(event) => { setSelectedYearId(event.target.value); setError(''); setMessage('') }}>
+      <select id="academic-year" className="parent-select" value={selectedYearId} disabled={!online || Boolean(editingLessonId)} onChange={(event) => { setCloudSnapshotReady(false); setSelectedYearId(event.target.value); setError(''); setMessage('') }}>
         {years.map((year) => <option value={year.id} key={year.id}>{year.starts_on} — {year.ends_on}</option>)}
       </select>
-      {selectedYear && !editingLessonId && <form className="auth-form" onSubmit={createLesson}>
+      {online && selectedYear && !editingLessonId && <form className="auth-form" onSubmit={createLesson}>
         <h3>Добавить урок</h3>
         <LessonFields draft={lessonDraft} setDraft={setLessonDraft} />
         <button className="primary-button" type="submit" disabled={savingLesson}>{savingLesson ? 'Сохраняем…' : 'Добавить урок'}</button>
       </form>}
-      {selectedYear && <form className="parent-exception-form" onSubmit={saveLessonException}>
+      {online && selectedYear && <form className="parent-exception-form" onSubmit={saveLessonException}>
         <h3>Изменить урок на дату</h3>
         <p>Недельное расписание не изменится: это изменение подействует только в выбранный день.</p>
         {!online && <p className="auth-message warning" role="status">Сейчас нет интернета. Сохранение будет доступно после подключения.</p>}
@@ -609,7 +682,7 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
             {proposalPendingRejection === visibleCalendarProposal.id && <section className="parent-confirm" role="alert"><strong>Не использовать эти рекомендации?</strong><p>Предложение исчезнет, но уже сохранённые вручную даты останутся.</p><div><button className="secondary-button" type="button" onClick={() => setProposalPendingRejection(null)} disabled={Boolean(reviewingProposalId)}>Отмена</button><button className="danger-button" type="button" onClick={() => void rejectCalendarProposal(visibleCalendarProposal)} disabled={Boolean(reviewingProposalId)}>{reviewingProposalId ? 'Сохраняем…' : 'Не использовать'}</button></div></section>}
           </>}
         </section>
-        <form className="parent-exception-form" onSubmit={saveNonSchoolPeriod}>
+        {online && <form className="parent-exception-form" onSubmit={saveNonSchoolPeriod}>
           <h3 id="non-school-title">Каникулы и неучебные дни</h3>
           <p>В эти даты уроки не показываются, а рюкзак будет собран на ближайший фактический учебный день.</p>
           {!online && <p className="auth-message warning" role="status">Сейчас нет интернета. Сохранение и удаление будут доступны после подключения.</p>}
@@ -621,7 +694,7 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
           </select>
           <div className="parent-form-grid"><div><label htmlFor="non-school-start">Начало</label><input id="non-school-start" type="date" min={selectedYear.starts_on} max={selectedYear.ends_on} value={nonSchoolDraft.startsOn} onChange={(event) => setNonSchoolDraft((current) => ({ ...current, startsOn: event.target.value, endsOn: current.endsOn < event.target.value ? event.target.value : current.endsOn }))} required /></div><div><label htmlFor="non-school-end">Окончание</label><input id="non-school-end" type="date" min={nonSchoolDraft.startsOn || selectedYear.starts_on} max={selectedYear.ends_on} value={nonSchoolDraft.endsOn} onChange={(event) => setNonSchoolDraft((current) => ({ ...current, endsOn: event.target.value }))} required /></div></div>
           <button className="secondary-button" type="submit" disabled={savingNonSchoolPeriod || !online}>{savingNonSchoolPeriod ? 'Сохраняем…' : 'Добавить в календарь'}</button>
-        </form>
+        </form>}
         <div className="parent-non-school-list" aria-live="polite">
           <h3>Сохранённые даты</h3>
           {nonSchoolPeriods.length === 0 ? <p className="parent-empty">Каникулы и неучебные дни ещё не добавлены.</p> : nonSchoolPeriods.map((period) => <article className="parent-non-school-row" key={`${period.reason}-${period.startsOn}-${period.endsOn}`}>
@@ -636,7 +709,7 @@ export function ParentScheduleEditor({ familyId }: { familyId: string }) {
         {lessons.length === 0 ? <p className="parent-empty">В этом учебном году уроков ещё нет.</p> : weekdays.map((day) => {
           const dayLessons = lessons.filter((lesson) => lesson.weekday === day.value)
           if (dayLessons.length === 0) return null
-          return <section className="parent-day" key={day.value}><h4>{day.label}</h4>{dayLessons.map((lesson) => <article className="parent-lesson-row" key={lesson.id}><strong>{lesson.lesson_order}. {subjectTitle(lesson)}</strong><span>{localTime(lesson.starts_at)}–{localTime(lesson.ends_at)}</span>{lesson.things.length > 0 && <p>Взять: {lesson.things.join(', ')}</p>}<div className="parent-lesson-actions"><button type="button" onClick={() => beginEditing(lesson)} disabled={Boolean(editingLessonId) && editingLessonId !== lesson.id}>Изменить</button><button type="button" onClick={() => { setLessonPendingDeletion(lesson); setConfirmDiscard(false) }} disabled={deletingLesson}>Удалить</button></div>{editingLessonId === lesson.id && <form className="parent-inline-form" onSubmit={createLesson}><h3>Изменить урок</h3><LessonFields draft={lessonDraft} setDraft={setLessonDraft} /><button className="primary-button" type="submit" disabled={savingLesson}>{savingLesson ? 'Сохраняем…' : 'Сохранить изменения'}</button><button className="secondary-button" type="button" onClick={requestCancelEditing} disabled={savingLesson}>Отменить изменения</button>{confirmDiscard && <section className="parent-confirm" role="alert"><strong>Не сохранять изменения?</strong><p>Изменения этого урока будут потеряны.</p><div><button className="secondary-button" type="button" onClick={() => setConfirmDiscard(false)}>Продолжить</button><button className="danger-button" type="button" onClick={finishEditing}>Не сохранять</button></div></section>}</form>}{lessonPendingDeletion?.id === lesson.id && <section className="parent-confirm" role="alert"><strong>Удалить урок «{subjectTitle(lesson)}»?</strong><p>Будет удалён только этот повторяющийся урок. Остальные уроки и предмет останутся.</p><div><button className="secondary-button" type="button" onClick={() => setLessonPendingDeletion(null)} disabled={deletingLesson}>Отмена</button><button className="danger-button" type="button" onClick={deleteLesson} disabled={deletingLesson}>{deletingLesson ? 'Удаляем…' : 'Удалить урок'}</button></div></section>}</article>)}</section>
+          return <section className="parent-day" key={day.value}><h4>{day.label}</h4>{dayLessons.map((lesson) => <article className="parent-lesson-row" key={lesson.id}><strong>{lesson.lesson_order}. {subjectTitle(lesson)}</strong><span>{localTime(lesson.starts_at)}–{localTime(lesson.ends_at)}</span>{lesson.things.length > 0 && <p>Взять: {lesson.things.join(', ')}</p>}<div className="parent-lesson-actions"><button type="button" onClick={() => beginEditing(lesson)} disabled={!online || (Boolean(editingLessonId) && editingLessonId !== lesson.id)}>Изменить</button><button type="button" onClick={() => { setLessonPendingDeletion(lesson); setConfirmDiscard(false) }} disabled={!online || deletingLesson}>Удалить</button></div>{online && editingLessonId === lesson.id && <form className="parent-inline-form" onSubmit={createLesson}><h3>Изменить урок</h3><LessonFields draft={lessonDraft} setDraft={setLessonDraft} /><button className="primary-button" type="submit" disabled={savingLesson}>{savingLesson ? 'Сохраняем…' : 'Сохранить изменения'}</button><button className="secondary-button" type="button" onClick={requestCancelEditing} disabled={savingLesson}>Отменить изменения</button>{confirmDiscard && <section className="parent-confirm" role="alert"><strong>Не сохранять изменения?</strong><p>Изменения этого урока будут потеряны.</p><div><button className="secondary-button" type="button" onClick={() => setConfirmDiscard(false)}>Продолжить</button><button className="danger-button" type="button" onClick={finishEditing}>Не сохранять</button></div></section>}</form>}{online && lessonPendingDeletion?.id === lesson.id && <section className="parent-confirm" role="alert"><strong>Удалить урок «{subjectTitle(lesson)}»?</strong><p>Будет удалён только этот повторяющийся урок. Остальные уроки и предмет останутся.</p><div><button className="secondary-button" type="button" onClick={() => setLessonPendingDeletion(null)} disabled={deletingLesson}>Отмена</button><button className="danger-button" type="button" onClick={deleteLesson} disabled={deletingLesson}>{deletingLesson ? 'Удаляем…' : 'Удалить урок'}</button></div></section>}</article>)}</section>
         })}
       </div>
     </>}

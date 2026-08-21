@@ -157,6 +157,7 @@ export async function loadWithOfflineFallback<T>(
 export const offlineKey = {
   parentFamily: (parentUserId: string) => `parent-session:${parentUserId}:family`,
   parentReviewQueue: (parentUserId: string, familyId: string) => `parent-session:${parentUserId}:family:${familyId}:review-queue`,
+  parentSchedule: (parentUserId: string, familyId: string) => `parent-session:${parentUserId}:family:${familyId}:schedule`,
   childProfile: (sessionUserId: string) => `session:${sessionUserId}:child-profile`,
   scheduleAcademicYear: (childId: string) => `child:${childId}:schedule-academic-year`,
   schedule: (childId: string, day: string) => `child:${childId}:schedule:${day}`,
