@@ -15,6 +15,17 @@ export type BackpackReview = {
   items: BackpackReviewRow[]
 }
 
+type ReviewQueueError = { code?: string; message?: string } | null
+
+export const reviewQueueRefreshIntervalMs = 8_000
+
+export function isMissingParentBookReviewsRpc(error: ReviewQueueError) {
+  if (!error) return false
+  return error.code === 'PGRST202'
+    || error.code === '42883'
+    || error.message?.includes('get_parent_book_reviews') === true
+}
+
 export function groupBackpackReviews(rows: BackpackReviewRow[]) {
   const grouped = new Map<string, BackpackReview>()
   for (const row of rows) {

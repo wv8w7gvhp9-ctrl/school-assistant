@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CloudBook } from '../domain/books'
-import { groupBackpackReviews, reviewAwardMessage, reviewCountLabel, type BackpackReviewRow } from '../domain/reviews'
+import { groupBackpackReviews, isMissingParentBookReviewsRpc, reviewAwardMessage, reviewCountLabel, reviewQueueRefreshIntervalMs, type BackpackReviewRow } from '../domain/reviews'
 import { homeworkApprovalMessage } from '../domain/stars'
 import { formatFullRussianDate } from '../domain/today'
 import { supabase } from '../lib/supabase'
@@ -52,11 +52,15 @@ export function ParentReviewQueue({ familyId, childId, childName, onReviewed }: 
     setLoading(true)
     setFailedSections([])
     try {
-      const [homeworkResult, booksResult, backpackResult] = await Promise.all([
+      const [homeworkResult, protectedBooksResult, backpackResult] = await Promise.all([
         supabase.rpc('get_parent_homework_reviews'),
-        supabase.from('books').select('id, title, author, status, started_on, finished_on, main_characters, summary, rating, review_status, updated_at').eq('family_id', familyId).eq('child_id', childId).eq('review_status', 'pending_review').order('updated_at'),
+        supabase.rpc('get_parent_book_reviews'),
         supabase.rpc('get_parent_backpack_reviews'),
       ])
+      if (requestId !== requestIdRef.current) return
+      const booksResult = protectedBooksResult.error && isMissingParentBookReviewsRpc(protectedBooksResult.error)
+        ? await supabase.from('books').select('id, title, author, status, started_on, finished_on, main_characters, summary, rating, review_status, updated_at').eq('family_id', familyId).eq('child_id', childId).eq('status', 'finished').eq('review_status', 'pending_review').order('updated_at')
+        : protectedBooksResult
       if (requestId !== requestIdRef.current) return
       const failed: string[] = []
       if (homeworkResult.error) {
@@ -102,6 +106,14 @@ export function ParentReviewQueue({ familyId, childId, childName, onReviewed }: 
       window.removeEventListener('focus', refreshVisibleQueue)
       document.removeEventListener('visibilitychange', refreshVisibleQueue)
     }
+  }, [loadQueue, online])
+
+  useEffect(() => {
+    if (!online) return
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void loadQueue()
+    }, reviewQueueRefreshIntervalMs)
+    return () => window.clearInterval(timer)
   }, [loadQueue, online])
 
   const backpacks = useMemo(() => groupBackpackReviews(backpackRows), [backpackRows])

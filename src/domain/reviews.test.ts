@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { groupBackpackReviews, reviewAwardMessage, reviewCountLabel, type BackpackReviewRow } from './reviews'
+import { groupBackpackReviews, isMissingParentBookReviewsRpc, reviewAwardMessage, reviewCountLabel, reviewQueueRefreshIntervalMs, type BackpackReviewRow } from './reviews'
 
 const row = (checklistId: string, itemId: string): BackpackReviewRow => ({
   checklist_id: checklistId,
@@ -27,5 +27,11 @@ describe('единая очередь родительской проверки'
     expect(reviewAwardMessage('book', 3)).toBe('Книга подтверждена. Начислены три звезды.')
     expect(reviewAwardMessage('backpack', 1)).toBe('Рюкзак подтверждён. Начислена одна звезда.')
     expect(reviewAwardMessage('book', 0)).toContain('уже были начислены')
+  })
+
+  it('обновляет открытую очередь автоматически и использует старый запрос только до применения новой RPC', () => {
+    expect(reviewQueueRefreshIntervalMs).toBeLessThanOrEqual(10_000)
+    expect(isMissingParentBookReviewsRpc({ code: 'PGRST202' })).toBe(true)
+    expect(isMissingParentBookReviewsRpc({ code: '42501', message: 'permission denied' })).toBe(false)
   })
 })
