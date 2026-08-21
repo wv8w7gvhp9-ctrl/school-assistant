@@ -72,6 +72,12 @@ export function isOfflineRecordForChild(record: unknown, childId: string) {
   return candidate.childId === childId || (typeof candidate.key === 'string' && candidate.key.startsWith(`child:${childId}:`))
 }
 
+export function isOfflineRecordForParent(record: unknown, parentUserId: string) {
+  if (!record || typeof record !== 'object') return false
+  const candidate = record as { key?: unknown }
+  return typeof candidate.key === 'string' && candidate.key.startsWith(`parent-session:${parentUserId}:`)
+}
+
 export async function clearOfflineDataForChild(childId: string) {
   const database = await openOfflineDatabase()
   const transaction = database.transaction([offlineSnapshotStore, offlineMutationStore], 'readwrite')
@@ -87,6 +93,22 @@ export async function clearOfflineDataForChild(childId: string) {
   }
   await offlineTransactionComplete(transaction)
   if (typeof window !== 'undefined') window.dispatchEvent(new Event('school-assistant:offline-queue-changed'))
+}
+
+export async function clearOfflineDataForParent(parentUserId: string) {
+  const database = await openOfflineDatabase()
+  const transaction = database.transaction([offlineSnapshotStore, offlineMutationStore], 'readwrite')
+  for (const storeName of [offlineSnapshotStore, offlineMutationStore]) {
+    const store = transaction.objectStore(storeName)
+    const request = store.openCursor()
+    request.onsuccess = () => {
+      const cursor = request.result
+      if (!cursor) return
+      if (isOfflineRecordForParent(cursor.value, parentUserId)) cursor.delete()
+      cursor.continue()
+    }
+  }
+  await offlineTransactionComplete(transaction)
 }
 
 export async function readOfflineSnapshot<T>(key: string): Promise<OfflineSnapshot<T> | null> {
@@ -133,6 +155,8 @@ export async function loadWithOfflineFallback<T>(
 }
 
 export const offlineKey = {
+  parentFamily: (parentUserId: string) => `parent-session:${parentUserId}:family`,
+  parentReviewQueue: (parentUserId: string, familyId: string) => `parent-session:${parentUserId}:family:${familyId}:review-queue`,
   childProfile: (sessionUserId: string) => `session:${sessionUserId}:child-profile`,
   scheduleAcademicYear: (childId: string) => `child:${childId}:schedule-academic-year`,
   schedule: (childId: string, day: string) => `child:${childId}:schedule:${day}`,

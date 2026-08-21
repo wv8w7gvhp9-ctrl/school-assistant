@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isOfflineRecordForChild, loadWithOfflineFallback, offlineKey, offlineSavedLabel, type OfflineSnapshot } from './offlineCache'
+import { isOfflineRecordForChild, isOfflineRecordForParent, loadWithOfflineFallback, offlineKey, offlineSavedLabel, type OfflineSnapshot } from './offlineCache'
 
 describe('ключи офлайн-снимков', () => {
   it('отделяют снимки и очередь удаляемого ребёнка от чужих данных', () => {
@@ -15,6 +15,13 @@ describe('ключи офлайн-снимков', () => {
 
   it('изолируют профиль ребёнка по сессии устройства', () => {
     expect(offlineKey.childProfile('device-a')).not.toBe(offlineKey.childProfile('device-b'))
+  })
+
+  it('изолируют родительский профиль и очередь по сессии и семье', () => {
+    expect(offlineKey.parentFamily('parent-a')).not.toBe(offlineKey.parentFamily('parent-b'))
+    expect(offlineKey.parentReviewQueue('parent-a', 'family-a')).not.toBe(offlineKey.parentReviewQueue('parent-a', 'family-b'))
+    expect(isOfflineRecordForParent({ key: offlineKey.parentReviewQueue('parent-a', 'family-a') }, 'parent-a')).toBe(true)
+    expect(isOfflineRecordForParent({ key: offlineKey.parentReviewQueue('parent-b', 'family-a') }, 'parent-a')).toBe(false)
   })
 
   it('изолируют историю звёзд разных детей', () => {

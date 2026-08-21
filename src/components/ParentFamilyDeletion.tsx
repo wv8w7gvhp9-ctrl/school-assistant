@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { canDeleteFamily, familyDeletionConfirmation } from '../domain/familyDeletion'
-import { clearOfflineDataForChild } from '../lib/offlineCache'
+import { clearOfflineDataForChild, clearOfflineDataForParent } from '../lib/offlineCache'
 import { supabase } from '../lib/supabase'
 import { useOnlineStatus } from './NetworkStatus'
 
 type DeletedFamilyRow = { deleted_family_id: string; deleted_child_id: string }
 
-export function ParentFamilyDeletion({ childId, childName, onDeleted }: {
+export function ParentFamilyDeletion({ parentUserId, childId, childName, onDeleted }: {
+  parentUserId: string
   childId: string
   childName: string
   onDeleted: (message: string) => void
@@ -53,7 +54,7 @@ export function ParentFamilyDeletion({ childId, childName, onDeleted }: {
     }
 
     try {
-      await clearOfflineDataForChild(childId)
+      await Promise.all([clearOfflineDataForChild(childId), clearOfflineDataForParent(parentUserId)])
       onDeleted('Семейный профиль и его облачные данные удалены. Родительский аккаунт сохранён.')
     } catch (cacheError) {
       console.warn('Не удалось очистить локальные семейные данные после удаления профиля', cacheError)

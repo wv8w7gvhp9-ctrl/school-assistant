@@ -3,8 +3,9 @@ import type { CloudBook } from '../domain/books'
 import { groupBackpackReviews, isMissingParentBookReviewsRpc, reviewAwardMessage, reviewCountLabel, reviewQueueRefreshIntervalMs, type BackpackReviewRow } from '../domain/reviews'
 import { homeworkApprovalMessage } from '../domain/stars'
 import { formatFullRussianDate } from '../domain/today'
+import { offlineKey, readOfflineSnapshot, saveOfflineSnapshot } from '../lib/offlineCache'
 import { supabase } from '../lib/supabase'
-import { useOnlineStatus } from './NetworkStatus'
+import { OfflineDataNote, useOnlineStatus } from './NetworkStatus'
 import { StatusChip } from './UI'
 
 type HomeworkReview = {
@@ -18,38 +19,67 @@ type HomeworkReview = {
 }
 
 type ReviewQueueProps = {
+  parentUserId: string
   familyId: string
   childId: string
   childName: string
   onReviewed: () => void
 }
 
+type ReviewSection = 'homework' | 'books' | 'backpack'
+
+type ParentReviewQueueSnapshot = {
+  homework: HomeworkReview[]
+  books: CloudBook[]
+  backpackRows: BackpackReviewRow[]
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Samara' }).format(new Date(`${value}T12:00:00+04:00`))
 }
 
-export function ParentReviewQueue({ familyId, childId, childName, onReviewed }: ReviewQueueProps) {
+export function ParentReviewQueue({ parentUserId, familyId, childId, childName, onReviewed }: ReviewQueueProps) {
   const online = useOnlineStatus()
+  const cacheKey = offlineKey.parentReviewQueue(parentUserId, familyId)
   const [homework, setHomework] = useState<HomeworkReview[]>([])
   const [books, setBooks] = useState<CloudBook[]>([])
   const [backpackRows, setBackpackRows] = useState<BackpackReviewRow[]>([])
   const [loading, setLoading] = useState(true)
   const [hasLoaded, setHasLoaded] = useState(false)
+  const [queueAvailable, setQueueAvailable] = useState(false)
+  const [cachedAt, setCachedAt] = useState<string | null>(null)
   const [failedSections, setFailedSections] = useState<string[]>([])
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [actionError, setActionError] = useState('')
   const requestIdRef = useRef(0)
 
+  const restoreQueueSnapshot = useCallback(async (requestId: number, sections?: Set<ReviewSection>) => {
+    const cached = await readOfflineSnapshot<ParentReviewQueueSnapshot>(cacheKey)
+    if (requestId !== requestIdRef.current || !cached) return false
+    if (!sections || sections.has('homework')) setHomework(cached.data.homework)
+    if (!sections || sections.has('books')) setBooks(cached.data.books)
+    if (!sections || sections.has('backpack')) setBackpackRows(cached.data.backpackRows)
+    setQueueAvailable(true)
+    setCachedAt(cached.savedAt)
+    return true
+  }, [cacheKey])
+
   const loadQueue = useCallback(async () => {
     if (!supabase) return
-    if (!online) {
-      setLoading(false)
-      return
-    }
     const requestId = requestIdRef.current + 1
     requestIdRef.current = requestId
     setLoading(true)
+    if (!online) {
+      setFailedSections([])
+      const restored = await restoreQueueSnapshot(requestId)
+      if (requestId === requestIdRef.current) {
+        if (!restored) setQueueAvailable(false)
+        setHasLoaded(true)
+        setLoading(false)
+      }
+      return
+    }
     setFailedSections([])
     try {
       const [homeworkResult, protectedBooksResult, backpackResult] = await Promise.all([
@@ -63,26 +93,44 @@ export function ParentReviewQueue({ familyId, childId, childName, onReviewed }: 
         : protectedBooksResult
       if (requestId !== requestIdRef.current) return
       const failed: string[] = []
+      const failedKeys = new Set<ReviewSection>()
+      const freshHomework = (homeworkResult.data ?? []) as unknown as HomeworkReview[]
+      const freshBooks = (booksResult.data ?? []) as CloudBook[]
+      const freshBackpackRows = (backpackResult.data ?? []) as unknown as BackpackReviewRow[]
       if (homeworkResult.error) {
         console.error('Не удалось загрузить домашку на проверку', homeworkResult.error)
         failed.push('домашку')
+        failedKeys.add('homework')
       }
-      else setHomework((homeworkResult.data ?? []) as unknown as HomeworkReview[])
+      else setHomework(freshHomework)
       if (booksResult.error) {
         console.error('Не удалось загрузить книги на проверку', booksResult.error)
         failed.push('книги')
+        failedKeys.add('books')
       }
-      else setBooks((booksResult.data ?? []) as CloudBook[])
+      else setBooks(freshBooks)
       if (backpackResult.error) {
         console.error('Не удалось загрузить рюкзак на проверку', backpackResult.error)
         failed.push('рюкзак')
+        failedKeys.add('backpack')
       }
-      else setBackpackRows((backpackResult.data ?? []) as BackpackReviewRow[])
+      else setBackpackRows(freshBackpackRows)
+      if (failedKeys.size === 0) {
+        setQueueAvailable(true)
+        setCachedAt(null)
+        await saveOfflineSnapshot(cacheKey, { homework: freshHomework, books: freshBooks, backpackRows: freshBackpackRows } satisfies ParentReviewQueueSnapshot)
+      }
+      else {
+        const restored = await restoreQueueSnapshot(requestId, failedKeys)
+        if (!restored && failedKeys.size < 3) setQueueAvailable(true)
+      }
       setFailedSections(failed)
     }
     catch (error) {
       if (requestId !== requestIdRef.current) return
       console.error('Не удалось обновить очередь проверки', error)
+      const restored = await restoreQueueSnapshot(requestId)
+      if (!restored) setQueueAvailable(false)
       setFailedSections(['домашку', 'книги', 'рюкзак'])
     }
     finally {
@@ -91,7 +139,7 @@ export function ParentReviewQueue({ familyId, childId, childName, onReviewed }: 
         setLoading(false)
       }
     }
-  }, [familyId, childId, online])
+  }, [familyId, childId, online, cacheKey, restoreQueueSnapshot])
 
   useEffect(() => { void loadQueue() }, [loadQueue])
 
@@ -126,7 +174,9 @@ export function ParentReviewQueue({ familyId, childId, childName, onReviewed }: 
     try {
       const { data, error } = await supabase.rpc('review_homework', { input_homework_id: id, input_decision: decision })
       if (error) throw error
-      setHomework((current) => current.filter((item) => item.id !== id))
+      const nextHomework = homework.filter((item) => item.id !== id)
+      setHomework(nextHomework)
+      await saveOfflineSnapshot(cacheKey, { homework: nextHomework, books, backpackRows } satisfies ParentReviewQueueSnapshot)
       const stars = Number((data?.[0] as { stars_awarded?: number } | undefined)?.stars_awarded ?? 0)
       setMessage(decision === 'approved' ? homeworkApprovalMessage(stars) : 'Задание возвращено на доработку.')
       onReviewed()
@@ -145,7 +195,9 @@ export function ParentReviewQueue({ familyId, childId, childName, onReviewed }: 
       const { data, error } = await supabase.rpc('review_finished_book', { input_book_id: id })
       if (error) throw error
       const stars = Number((data?.[0] as { stars_awarded?: number } | undefined)?.stars_awarded ?? 0)
-      setBooks((current) => current.filter((book) => book.id !== id))
+      const nextBooks = books.filter((book) => book.id !== id)
+      setBooks(nextBooks)
+      await saveOfflineSnapshot(cacheKey, { homework, books: nextBooks, backpackRows } satisfies ParentReviewQueueSnapshot)
       setMessage(reviewAwardMessage('book', stars))
       onReviewed()
     }
@@ -163,7 +215,9 @@ export function ParentReviewQueue({ familyId, childId, childName, onReviewed }: 
       const { data, error } = await supabase.rpc('review_backpack', { input_checklist_id: id })
       if (error) throw error
       const stars = Number((data?.[0] as { stars_awarded?: number } | undefined)?.stars_awarded ?? 0)
-      setBackpackRows((current) => current.filter((row) => row.checklist_id !== id))
+      const nextBackpackRows = backpackRows.filter((row) => row.checklist_id !== id)
+      setBackpackRows(nextBackpackRows)
+      await saveOfflineSnapshot(cacheKey, { homework, books, backpackRows: nextBackpackRows } satisfies ParentReviewQueueSnapshot)
       setMessage(reviewAwardMessage('backpack', stars))
       onReviewed()
     }
@@ -179,12 +233,13 @@ export function ParentReviewQueue({ familyId, childId, childName, onReviewed }: 
     <p>Все работы ребёнка, которые ждут вашего решения, собраны здесь.</p>
     <div className="review-summary" aria-label={`Ожидают проверки: домашка ${counts.homework}, книги ${counts.book}, рюкзак ${counts.backpack}`}><span>Домашка <strong>{counts.homework}</strong></span><span>Книги <strong>{counts.book}</strong></span><span>Рюкзак <strong>{counts.backpack}</strong></span></div>
     <button type="button" className="text-button review-refresh" disabled={!online || loading} onClick={() => void loadQueue()}>{loading && hasLoaded ? 'Обновляем очередь…' : 'Обновить очередь'}</button>
-    {!online && <div className="auth-message warning" role="status"><strong>Нет интернета</strong><p>{hasLoaded ? 'Уже загруженные карточки можно просмотреть, но решение сохранится только после подключения.' : 'Подключитесь, чтобы загрузить очередь проверки.'}</p></div>}
+    {!online && <div className="auth-message warning" role="status"><strong>Нет интернета</strong><p>{queueAvailable ? 'Показываем последние сохранённые карточки. Подтверждение и возврат станут доступны после подключения.' : 'Подключитесь, чтобы впервые загрузить очередь проверки.'}</p></div>}
+    {cachedAt && <OfflineDataNote savedAt={cachedAt} />}
     {loading && !hasLoaded && <p className="auth-loading" role="status">Собираем очередь проверки…</p>}
     {failedSections.length > 0 && <div className="auth-message error" role="alert"><p>Не удалось обновить: {failedSections.join(', ')}. Ранее загруженные карточки сохранены.</p><button type="button" className="secondary-button" disabled={!online || loading} onClick={() => void loadQueue()}>Повторить</button></div>}
     {actionError && <div className="auth-message error" role="alert"><p>{actionError}</p><button type="button" className="secondary-button" disabled={!online || loading} onClick={() => { setActionError(''); void loadQueue() }}>Обновить очередь</button></div>}
     {message && <p className="auth-message success" role="status">{message}</p>}
-    {!loading && hasLoaded && total === 0 && failedSections.length === 0 && <div className="parent-empty review-empty"><strong>Всё проверено</strong><p>Новых работ от {childName} пока нет.</p></div>}
+    {!loading && hasLoaded && queueAvailable && total === 0 && failedSections.length === 0 && <div className="parent-empty review-empty"><strong>Всё проверено</strong><p>Новых работ от {childName} пока нет.</p></div>}
     <div className="review-list">
       {homework.map((item) => <article className="review-card" key={`homework:${item.id}`}><div className="review-card-heading"><span className="review-kind">Домашка</span><StatusChip status="pending_review" /></div><h3>{item.subject_title || 'Предмет'}</h3><p>{item.task}</p><small>К {formatDate(item.due_on)}{item.preferred_by ? ` · желательно до ${item.preferred_by.slice(0, 5)}` : ''}</small><div className="parent-review-actions"><button type="button" className="success-button" disabled={Boolean(busyKey) || !online} onClick={() => void reviewHomework(item.id, 'approved')}>{busyKey === `homework:${item.id}` ? 'Сохраняем…' : 'Подтвердить'}</button><button type="button" className="secondary-button" disabled={Boolean(busyKey) || !online} onClick={() => void reviewHomework(item.id, 'needs_revision')}>Вернуть на доработку</button></div></article>)}
       {books.map((book) => <article className="review-card" key={`book:${book.id}`}><div className="review-card-heading"><span className="review-kind">Книга</span><StatusChip status="pending_review" /></div><h3>{book.title}</h3><p>{book.author}</p>{book.main_characters && <p><strong>Ответ о героях:</strong> {book.main_characters}</p>}{book.summary && <p><strong>О книге:</strong> {book.summary}</p>}{book.rating && <p><strong>Оценка:</strong> {book.rating} из 5</p>}<button type="button" className="success-button" disabled={Boolean(busyKey) || !online} onClick={() => void reviewBook(book.id)}>{busyKey === `book:${book.id}` ? 'Подтверждаем…' : 'Подтвердить прочтение'}</button></article>)}

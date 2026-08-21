@@ -1,9 +1,9 @@
 import { lazy, Suspense, useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, turnstileSiteKey } from '../lib/supabase'
-import { loadWithOfflineFallback, offlineKey } from '../lib/offlineCache'
+import { clearOfflineDataForParent, loadWithOfflineFallback, offlineKey, saveOfflineSnapshot } from '../lib/offlineCache'
 import { ChildSessionProvider } from './ChildSession'
-import { useOnlineStatus } from './NetworkStatus'
+import { OfflineDataNote, useOnlineStatus } from './NetworkStatus'
 import { Turnstile } from './Turnstile'
 import { ParentStarHistory } from './StarHistory'
 
@@ -27,6 +27,7 @@ function MissingConfiguration({ children }: { children: ReactNode }) {
 }
 
 function ParentSignedIn({ session }: { session: Session }) {
+  const online = useOnlineStatus()
   const [signingOut, setSigningOut] = useState(false)
   const [family, setFamily] = useState<FamilyProfile | null>(null)
   const [loadingFamily, setLoadingFamily] = useState(true)
@@ -37,20 +38,34 @@ function ParentSignedIn({ session }: { session: Session }) {
   const [linkCode, setLinkCode] = useState<LinkCode | null>(null)
   const [creatingCode, setCreatingCode] = useState(false)
   const [reviewVersion, setReviewVersion] = useState(0)
+  const [familySavedAt, setFamilySavedAt] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!supabase) return
-    void supabase.rpc('get_my_family').then(({ data, error }) => {
-      if (error) setFamilyError('Не удалось загрузить семейный профиль. Попробуйте обновить страницу.')
-      else setFamily((data?.[0] as FamilyProfile | undefined) ?? null)
+    const client = supabase
+    if (!client) return
+    let cancelled = false
+    void loadWithOfflineFallback<FamilyProfile[]>(
+      offlineKey.parentFamily(session.user.id),
+      () => client.rpc('get_my_family'),
+      online,
+    ).then((result) => {
+      if (cancelled) return
+      const profile = result.data?.[0] ?? null
+      setFamily(profile)
+      setFamilySavedAt(result.source === 'cache' ? result.savedAt : null)
+      if (result.source === 'none') setFamilyError(online ? 'Не удалось загрузить семейный профиль. Попробуйте обновить страницу.' : 'Нет интернета, а семейный профиль ещё не сохранён на этом устройстве.')
+      else setFamilyError('')
       setLoadingFamily(false)
     })
-  }, [])
+    return () => { cancelled = true }
+  }, [online, session.user.id])
 
   async function signOut() {
     if (!supabase) return
     setSigningOut(true)
     await supabase.auth.signOut()
+    try { await clearOfflineDataForParent(session.user.id) }
+    catch (error) { console.warn('Не удалось очистить локальные данные родителя после выхода', error) }
     setSigningOut(false)
   }
 
@@ -62,7 +77,12 @@ function ParentSignedIn({ session }: { session: Session }) {
     setFamilyMessage('')
     const { data, error } = await supabase.rpc('create_family', { child_display_name: childName.trim() })
     if (error) setFamilyError(error.code === '23505' ? 'Семейный профиль уже создан. Обновите страницу.' : 'Не удалось создать семейный профиль. Проверьте имя и повторите попытку.')
-    else setFamily((data?.[0] as FamilyProfile | undefined) ?? null)
+    else {
+      const profile = (data?.[0] as FamilyProfile | undefined) ?? null
+      setFamily(profile)
+      setFamilySavedAt(null)
+      if (profile) await saveOfflineSnapshot(offlineKey.parentFamily(session.user.id), [profile])
+    }
     setCreatingFamily(false)
   }
 
@@ -90,9 +110,10 @@ function ParentSignedIn({ session }: { session: Session }) {
     {!loadingFamily && !family && <form className="auth-form" onSubmit={createFamily}><label htmlFor="child-name">Как зовут ребёнка?</label><p className="field-help">Достаточно имени или домашнего псевдонима. Другие личные данные не нужны.</p><input id="child-name" name="child-name" type="text" autoComplete="off" maxLength={48} value={childName} onChange={(event) => { setChildName(event.target.value); setFamilyError('') }} placeholder="Например, Миша" required /><button className="primary-button" type="submit" disabled={creatingFamily}>{creatingFamily ? 'Создаём профиль…' : 'Создать семейный профиль'}</button></form>}
     {familyMessage && <p className="auth-message success" role="status">{familyMessage}</p>}
     {family && <div className="family-success" role="status"><strong>Семья создана</strong><p>Профиль ребёнка: {family.child_name}.</p></div>}
-    {family && <Suspense fallback={<p className="auth-loading" role="status">Открываем данные семьи…</p>}><ParentReviewQueue familyId={family.family_id} childId={family.child_id} childName={family.child_name} onReviewed={() => setReviewVersion((current) => current + 1)} /><ParentScheduleEditor familyId={family.family_id} /><ParentHomeworkEditor familyId={family.family_id} childId={family.child_id} reviewVersion={reviewVersion} /><ParentBooksEditor familyId={family.family_id} childId={family.child_id} reviewVersion={reviewVersion} /><ParentClubsEditor familyId={family.family_id} childId={family.child_id} /><ParentStarHistory childId={family.child_id} childName={family.child_name} reviewVersion={reviewVersion} /><ParentAcademicHistory childName={family.child_name} /><ParentNotificationSettings /><ParentChildDevices /></Suspense>}
+    {familySavedAt && <OfflineDataNote savedAt={familySavedAt} />}
+    {family && <Suspense fallback={<p className="auth-loading" role="status">Открываем данные семьи…</p>}><ParentReviewQueue parentUserId={session.user.id} familyId={family.family_id} childId={family.child_id} childName={family.child_name} onReviewed={() => setReviewVersion((current) => current + 1)} /><ParentScheduleEditor familyId={family.family_id} /><ParentHomeworkEditor familyId={family.family_id} childId={family.child_id} reviewVersion={reviewVersion} /><ParentBooksEditor familyId={family.family_id} childId={family.child_id} reviewVersion={reviewVersion} /><ParentClubsEditor familyId={family.family_id} childId={family.child_id} /><ParentStarHistory childId={family.child_id} childName={family.child_name} reviewVersion={reviewVersion} /><ParentAcademicHistory childName={family.child_name} /><ParentNotificationSettings /><ParentChildDevices /></Suspense>}
     {family && <section className="link-code-panel"><h2>Подключить устройство ребёнка</h2><p>Откройте приложение на устройстве ребёнка, выберите «Подключить устройство ребёнка» и введите этот код.</p>{linkCode ? <div className="link-code" role="status"><strong>{linkCode.display_code}</strong><span>Код действует 15 минут и сработает только один раз.</span></div> : <button type="button" className="primary-button" onClick={createLinkCode} disabled={creatingCode}>{creatingCode ? 'Создаём код…' : 'Получить код подключения'}</button>}</section>}
-    {family && <Suspense fallback={<p className="auth-loading" role="status">Открываем настройки семьи…</p>}><ParentFamilyDeletion childId={family.child_id} childName={family.child_name} onDeleted={finishFamilyDeletion} /></Suspense>}
+    {family && <Suspense fallback={<p className="auth-loading" role="status">Открываем настройки семьи…</p>}><ParentFamilyDeletion parentUserId={session.user.id} childId={family.child_id} childName={family.child_name} onDeleted={finishFamilyDeletion} /></Suspense>}
     {familyError && <p className="auth-message error" role="alert">{familyError}</p>}
     <button type="button" className="secondary-button auth-button" onClick={signOut} disabled={signingOut}>{signingOut ? 'Выходим…' : 'Выйти'}</button>
   </section></main>
